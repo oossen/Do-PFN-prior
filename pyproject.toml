@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dopfnprior"
+version = "0.1"
+authors = [
+    { name = "Ole Ossen", email = "ole.ossen@gmail.com" },
+]
+description = "A simple regression prior for PFNs"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "torch>=2.1",
+    "xgboost",
+]
