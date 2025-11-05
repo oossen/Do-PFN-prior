@@ -2,10 +2,10 @@ from typing import Dict, Optional, Union
 import torch
 import networkx as nx
 
-from prior.scm.scm import SCM
-from prior.mechanisms.mlp_mechanism import SampleMLPMechanism
-from prior.mechanisms.xg_boost_mechanism import SampleXGBoostMechanism
-from prior.scm.noise_dist import MixedDist
+from scm.scm import SCM
+from mechanisms.mlp_mechanism import SampleMLPMechanism
+from mechanisms.xg_boost_mechanism import SampleXGBoostMechanism
+from scm.noise_dist import MixedDist
 
 
 class SCMBuilder:

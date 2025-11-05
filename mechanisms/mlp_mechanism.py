@@ -1,8 +1,8 @@
 from typing import List, Optional
 import torch
 from torch import nn, Tensor
-from prior.mechanisms.base_mechanism import BaseMechanism
-from prior.mechanisms.tab_icl_activations import RandomActivation
+from mechanisms.base_mechanism import BaseMechanism
+from mechanisms.tab_icl_activations import RandomActivation
 
 
 class SampleMLPMechanism(BaseMechanism):

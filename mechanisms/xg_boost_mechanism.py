@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import Tensor
 import xgboost as xgb
-from prior.mechanisms.base_mechanism import BaseMechanism
+from mechanisms.base_mechanism import BaseMechanism
 
 
 class XGBoostLayer(torch.nn.Module):

@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 import torch.distributions as dist
 
-from prior.utils.hyperparameter_sampling import TorchDistributionSampler
+from utils.hyperparameter_sampling import TorchDistributionSampler
 
 
 class MixedDist:
