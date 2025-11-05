@@ -10,7 +10,7 @@ This repository contains code for a prior for a regression prior-fitted network 
 
 ## Usage
 The following toy example trains a NanoTabPFN Regressor on this prior:
-```
+```python
 from functools import partial
 import torch
 
