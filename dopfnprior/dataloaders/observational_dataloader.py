@@ -79,7 +79,7 @@ class ObservationalDataLoader(DataLoader):
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
         data = scm.propagate(sample_shape)
-        X, y, _, _ = select_features(data, graph, dataset_params["dropout_prob"], self.generator)
+        X, y = select_features(data, dataset_params["dropout_prob"], self.generator)
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}
