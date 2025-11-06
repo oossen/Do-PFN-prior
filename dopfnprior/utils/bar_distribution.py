@@ -1,4 +1,3 @@
-from typing import Callable, Type
 from pfns.model.bar_distribution import FullSupportBarDistribution
 from pfns.model.bar_distribution import get_bucket_borders
 from nanotabpfn.utils import get_default_device
@@ -7,10 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 
 
-def make_bar_distribution(prior_factory: Callable[[int], DataLoader],
-                          n_buckets: int = 100,
-                          n_samples: int = 10000
-                          ):
+def make_bar_distribution(prior: DataLoader, n_buckets: int = 100):
     """
     Construct a full support bar/Riemann distribution.
     Sample `n_samples` many data tables from `prior` and
@@ -19,7 +15,6 @@ def make_bar_distribution(prior_factory: Callable[[int], DataLoader],
     The argument `prior_factory` takes one int argument (number of samples) and returns a dataloader.
     """
     sampled_ys = []
-    prior = iter(prior_factory(n_samples))
     for data in prior:
         y = data['y']
         y_mean = y.mean(dim=1, keepdim=True)
