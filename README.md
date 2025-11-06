@@ -7,6 +7,7 @@ This repository contains code for a prior for a regression prior-fitted network 
 - simple code base that should make it relatively easy to adapt things as needed
 - easy configuration of basic parameters with configuration file
 - compatible out of the box with NanoTabPFN [4]
+- fully seeded: on-the-fly data generation is completely determined by one integer seed
 
 ## Usage
 The following toy example trains a NanoTabPFN Regressor on this prior:
