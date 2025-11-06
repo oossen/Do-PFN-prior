@@ -1,7 +1,5 @@
 from typing import Dict, Optional, Tuple
-from copy import deepcopy
 import torch
-import networkx as nx
 
 
 def select_features(data: Dict[int, torch.Tensor],
@@ -31,32 +29,42 @@ def select_features(data: Dict[int, torch.Tensor],
     y : tensor of shape (B, N, 1)
         The targets of the generated data batch.
     """
-    # select target node
-    nodes = list(data.keys())
-    target_node_idx = int(torch.randint(0, len(nodes), (1,), generator=generator))
-    target_node = nodes[target_node_idx]
-    target_values = data[target_node][:, :, 0]
-        
-    # treat non-target features
-    nodes.remove(target_node)
-    kept = []
-    for i, v in enumerate(nodes):
-        # make sure to keep at least two nodes, overriding the sampling if necessary
-        if torch.rand(1, generator=generator) > dropout_prob or (len(kept) < 2 and i >= len(nodes) - 2):
-            kept.append(v)
-        
-    feature_values = torch.cat(list(data[v] for v in kept), dim=2)
-        
+    # Build data tensor [B, N, F_total]
+    data_tensor = torch.cat(list(data.values()), dim=2)
+    B, N, F = data_tensor.shape
+    
     # randomly switch signs
-    B, N, F = feature_values.shape
-    sign_x = torch.randint(0, 2, (B, 1, F), generator=generator, dtype=torch.float32) * 2 - 1
-    feature_values *= sign_x
-    sign_y = torch.randint(0, 2, (B, 1), generator=generator, dtype=torch.float32) * 2 - 1
-    target_values *= sign_y
+    sign = torch.randint(0, 2, (B, 1, F), generator=generator, dtype=torch.float32) * 2 - 1
+    data_tensor *= sign
+
+    # Target selection
+    target_feat = torch.randint(0, F, (1,), generator=generator)
+    target_values = data_tensor[:, :, target_feat].squeeze(-1)
+
+    # Candidate (non-target) columns
+    remaining_cols = [i for i in range(F) if i != target_feat]
+    kept = []
+    dropped = []
+    for col in remaining_cols:
+        if torch.rand(1, generator=generator) < dropout_prob:
+            dropped.append(col)
+        else:
+            kept.append(col)
+    # Ensure at least one feature kept
+    if len(kept) == 0:
+        kept = [0]
+        # remove it from dropped list if present
+        dropped = dropped[1:]
+        
+    X = data_tensor[:, :, kept]
+    y = target_values
         
     # shuffle data
-    perm_rows = torch.randperm(N, device=feature_values.device, generator=generator)
-    X = feature_values[:, perm_rows, :]
-    y = target_values[:, perm_rows]
+    B, N, F = X.shape
+    perm_rows = torch.randperm(N, device=X.device, generator=generator)
+    X = X[:, perm_rows, :]
+    y = y[:, perm_rows]
+    perm_cols = torch.randperm(F, device=X.device, generator=generator)
+    X = X[:, :, perm_cols]
         
     return X, y
