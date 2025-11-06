@@ -27,7 +27,6 @@ class SCM:
     noise : Mapping[int, Distribution]
     device : torch.device | str
     dtype : torch.dtype
-    fast : bool, default False
     """
 
     def __init__(
@@ -37,14 +36,12 @@ class SCM:
         noise: Mapping[int, Any],
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
-        fast: bool = False,
     ) -> None:
         self.dag = dag
         self.mechanisms = mechanisms
         self.noise = noise
         self.device = torch.device(device)
         self.dtype = dtype
-        self.fast = bool(fast)
 
         # --- Topology & parents
         self._topo: List[int] = list(nx.topological_sort(dag))
@@ -59,11 +56,6 @@ class SCM:
         # --- Fixed noise buffers & per-node views
         self._fixed: Optional[Dict[int, Tensor]] = None
         self._fixed_shape: Optional[Tuple[int, ...]] = None
-
-        if not self.fast:
-            self._validate_strict()
-
-    # ---------------------- noise preparation API ----------------------
     
     @torch.no_grad()
     def sample_noise(self,
@@ -90,8 +82,6 @@ class SCM:
         self._fixed_shape = sample_shape
         return views
 
-    # ---------------------- public sampling API ----------------------
-
     @torch.no_grad()
     def propagate(self, sample_shape: Tuple[int, ...]) -> Dict[int, Tensor]:
         xs: Dict[int, Tensor] = {}
@@ -111,20 +101,3 @@ class SCM:
             xs[v] = y
 
         return xs
-
-    # ---------------------- safe mode (checks) ----------------------
-
-    def _validate_strict(self) -> None:
-        # Graph must be acyclic
-        if not nx.is_directed_acyclic_graph(self.dag):
-            raise ValueError("DAG must be acyclic.")
-
-        # All nodes must have mechanisms
-        missing = [v for v in self._topo if v not in self.mechanisms]
-        if missing:
-            raise KeyError(f"Missing mechanisms for nodes: {missing}")
-
-        # Noise maps: keys must be subset of nodes
-        extra = [k for k in self.noise.keys() if k not in self._topo]
-        if extra:
-            raise KeyError(f"Noise provided for unknown nodes: {extra}")

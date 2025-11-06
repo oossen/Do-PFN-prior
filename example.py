@@ -5,9 +5,9 @@ from nanotabpfn.utils import get_default_device
 from nanotabpfn.train import train
 from nanotabpfn.model import NanoTabPFNModel
 
-from utils.bar_distribution import make_bar_distribution
-from dataloaders.observational_dataloader import ObservationalDataLoader
-from configs.default_config import prior_config
+from dopfnprior.utils.bar_distribution import make_bar_distribution
+from dopfnprior.dataloaders.observational_dataloader import ObservationalDataLoader
+from dopfnprior.configs.default_config import prior_config
 
 
 device = get_default_device()

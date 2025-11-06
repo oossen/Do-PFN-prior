@@ -42,11 +42,6 @@ prior_config = {
     },
 
     "scm_config": {    
-        # probability of using XGBoost mechanism as opposed to MLP mechanism
-        # float
-        "xgboost_prob": {
-            "value": 0.0
-        },
         # number of features contained in each node
         # int
         "node_dim": {
@@ -62,29 +57,6 @@ prior_config = {
         "mlp_hidden_dim": {
             "distribution": "categorical",
             "distribution_parameters": {"choices": [8, 16, 32]}
-        },
-        # number of hidden layers in XGBoost mechanisms
-        # 0 is probably already good
-        # int, >= 0
-        "xgb_num_hidden_layers": {
-            "value": 0
-        },
-        # number of hidden layers in XGBoost mechanisms
-        # int
-        "xgb_hidden_dim": {
-            "distribution": "categorical",
-            "distribution_parameters": {"choices": [16, 32, 64]}
-        },
-        # number of samples from a Gaussian used to fit the random XGBoost models
-        # int
-        "xgb_n_training_samples": {
-            "distribution": "discrete_uniform",
-            "distribution_parameters": {"low": 100, "high": 500}
-        },
-        # whether to add noise to the XGBoost mechanisms
-        # bool
-        "xgb_add_noise": {
-            "value": True
         },
         # the standard deviation of noise sampled at root nodes when propagating through the SCM
         # float
