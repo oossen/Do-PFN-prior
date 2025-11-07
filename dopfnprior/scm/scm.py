@@ -3,7 +3,7 @@ import torch
 from torch import Tensor
 import networkx as nx
 
-from mechanisms.base_mechanism import BaseMechanism
+from dopfnprior.mechanisms.base_mechanism import BaseMechanism
 
 
 class SCM:

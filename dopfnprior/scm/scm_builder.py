@@ -2,9 +2,9 @@ from typing import Dict, Optional, Union
 import torch
 import networkx as nx
 
-from scm.scm import SCM
-from mechanisms.mlp_mechanism import SampleMLPMechanism
-from scm.noise_dist import MixedDist
+from dopfnprior.scm.scm import SCM
+from dopfnprior.mechanisms.mlp_mechanism import SampleMLPMechanism
+from dopfnprior.scm.noise_dist import MixedDist
 
 
 class SCMBuilder:

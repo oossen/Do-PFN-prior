@@ -1,6 +1,3 @@
-from nanotabpfn.model import NanoTabPFNModel
-
-
 prior_config = {
     
     "dataset_config": {
@@ -67,11 +64,6 @@ prior_config = {
         # float
         "non_root_std": {
             "value": 0.1
-        },
-        # whether to use a fast SCM implementation (as opposed to doing additional checks)
-        # bool
-        "scm_fast": { 
-            "value": True
         },
     }
 }

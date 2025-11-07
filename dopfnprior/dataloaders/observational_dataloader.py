@@ -2,10 +2,10 @@ from typing import Any, Dict, Iterator
 import torch
 from torch.utils.data import DataLoader
 
-from causal_graph.graph_builder import GraphBuilder
-from scm.scm_builder import SCMBuilder
-from utils.hyperparameter_sampling import sample_parameters, build_samplers
-from utils.select_data import select_features
+from dopfnprior.causal_graph.graph_builder import GraphBuilder
+from dopfnprior.scm.scm_builder import SCMBuilder
+from dopfnprior.utils.hyperparameter_sampling import sample_parameters, build_samplers
+from dopfnprior.utils.select_data import select_features
 
 
 class ObservationalDataLoader(DataLoader):
