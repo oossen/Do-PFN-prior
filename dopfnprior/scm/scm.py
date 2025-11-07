@@ -15,11 +15,6 @@ class SCM:
     1) scm.sample(B)                        # samples & fixes noise
     2) xs = scm.propagate(B)                # uses the fixed noises
 
-    Fast vs Safe
-    ------------
-    - fast=True : no checks/casts, calls mech._forward directly.
-    - fast=False: checks acyclicity and if mechanisms match the underlying graph.
-
     Parameters
     ----------
     dag : CausalDAG

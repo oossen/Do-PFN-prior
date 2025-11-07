@@ -47,10 +47,11 @@ class SampleMLPMechanism(BaseMechanism):
             self.net = None
         else:
             d = input_dim
-            act = RandomActivation(generator=self.gen)
             for _ in range(n_hidden):
+                act = RandomActivation(generator=self.gen)
                 layers += [_deterministic_linear_layer(d, hidden_dim, generator=self.gen), act]
                 d = hidden_dim
+            act = RandomActivation(generator=self.gen)
             layers += [_deterministic_linear_layer(d, node_dim, generator=self.gen), act]
             self.net = nn.Sequential(*layers)
 

@@ -10,7 +10,7 @@ class StdScaleLayer(nn.Module):
 
     Computes mean and standard deviation on the first batch and uses these
     statistics to normalize subsequent inputs using (x - mean) / std.
-    The statistics are computed along dimension 0.
+    The statistics are computed along dimension 1, the data sample dimension.
     """
 
     def __init__(self):
