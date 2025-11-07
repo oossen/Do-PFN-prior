@@ -1,6 +1,6 @@
 from pfns.model.bar_distribution import FullSupportBarDistribution
 from pfns.model.bar_distribution import get_bucket_borders
-from nanotabpfn.utils import get_default_device
+from tfmplayground.utils import get_default_device
 
 import torch
 from torch.utils.data import DataLoader

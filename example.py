@@ -1,11 +1,11 @@
 import torch
 from sklearn.metrics import r2_score
 
-from nanotabpfn.utils import get_default_device
-from nanotabpfn.train import train
-from nanotabpfn.model import NanoTabPFNModel
-from nanotabpfn.callbacks import ConsoleLoggerCallback
-from nanotabpfn.interface import NanoTabPFNRegressor
+from tfmplayground.utils import get_default_device
+from tfmplayground.train import train
+from tfmplayground.model import NanoTabPFNModel
+from tfmplayground.callbacks import ConsoleLoggerCallback
+from tfmplayground.interface import NanoTabPFNRegressor
 
 from dopfnprior.utils.bar_distribution import make_bar_distribution
 from dopfnprior.dataloaders.observational_dataloader import ObservationalDataLoader
