@@ -1,5 +1,5 @@
-from pfns.model.bar_distribution import FullSupportBarDistribution
-from pfns.model.bar_distribution import get_bucket_borders
+from pfns.bar_distribution import FullSupportBarDistribution
+from pfns.bar_distribution import get_bucket_limits
 from tfmplayground.utils import get_default_device
 
 import torch
@@ -25,5 +25,5 @@ def make_bar_distribution(prior: DataLoader, n_buckets: int = 100):
     ys_tensor = torch.concat(sampled_ys)
     
     device = get_default_device()
-    buckets = get_bucket_borders(n_buckets, ys=ys_tensor).to(device)
+    buckets = get_bucket_limits(n_buckets, ys=ys_tensor).to(device)
     return FullSupportBarDistribution(buckets), buckets
