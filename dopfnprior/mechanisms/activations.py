@@ -51,4 +51,4 @@ class RandomActivation(nn.Module):
         activation_factory = activations[idx]
             
         # Instantiate the activation
-        return activation_factory(generator=self.gen)
+        return activation_factory()
