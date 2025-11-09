@@ -3,7 +3,7 @@ import torch
 from torch import nn, Tensor
 
 from dopfnprior.mechanisms.base_mechanism import BaseMechanism
-from dopfnprior.mechanisms.tab_icl_activations import RandomActivation
+from dopfnprior.mechanisms.activations import RandomActivation
 
 
 class SampleMLPMechanism(BaseMechanism):

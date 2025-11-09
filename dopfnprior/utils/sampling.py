@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+import math
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.distributions as dist
@@ -50,6 +51,14 @@ class TorchDistributionSampler(DistributionSampler):
             value = self.distribution.sample((n,))
 
         return value
+    
+    def sample_shape(self, shape: Tuple[int, ...], generator: torch.Generator) -> torch.Tensor:
+        """
+        Fully vectorized sampling for any output shape.
+        """
+        N = int(math.prod(shape))
+        flat = self.sample_n(N, generator=generator)
+        return flat.reshape(shape)
     
     def sample(self, generator: Optional[torch.Generator] = None) -> Any:
         singleton_tensor = self.sample_n(1, generator)

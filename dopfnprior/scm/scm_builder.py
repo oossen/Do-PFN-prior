@@ -1,10 +1,11 @@
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 import torch
+import torch.distributions as dist
 import networkx as nx
 
 from dopfnprior.scm.scm import SCM
 from dopfnprior.mechanisms.mlp_mechanism import SampleMLPMechanism
-from dopfnprior.scm.noise_dist import MixedDist
+from dopfnprior.utils.sampling import TorchDistributionSampler
 
 
 class SCMBuilder:
@@ -98,9 +99,10 @@ class SCMBuilder:
         
         return mechanisms
     
-    def _create_noise_distribution(self) -> Dict[int, MixedDist]:
+    def _create_noise_distribution(self) -> Dict[int, TorchDistributionSampler]:
         """Create noise distributions for exogenous and endogenous variables."""
         root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
         non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
-        noise = {v: MixedDist(std=self.root_std) for v in root_nodes} | {v: MixedDist(std=self.non_root_std) for v in non_root_nodes}
+        noise = {v: TorchDistributionSampler(dist.Normal(loc=0.0, scale=self.root_std)) for v in root_nodes} | \
+                {v: TorchDistributionSampler(dist.Normal(loc=0.0, scale=self.non_root_std)) for v in non_root_nodes}
         return noise
