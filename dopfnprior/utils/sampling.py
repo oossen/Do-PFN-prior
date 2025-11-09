@@ -37,6 +37,7 @@ class TorchDistributionSampler(DistributionSampler):
     def __init__(self, distribution: dist.Distribution):
         self.distribution = distribution
     
+    @torch.no_grad()
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         if generator is not None:
             # Use the generator for sampling
