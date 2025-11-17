@@ -24,7 +24,8 @@ class GraphBuilder:
         """
         self.num_nodes = num_nodes
         # Set a minimum probability to avoid very sparse small graphs
-        edge_prob_min = 1 / (np.sqrt(num_nodes))
+        # 2 -> 87%, 3 -> 54%, 5 -> 28%, 10 -> 13%, 20 -> 5% 30 -> 3%
+        edge_prob_min = 2 / (num_nodes ** 1.2)
         self.edge_prob = max(edge_prob_min, edge_prob) 
 
 
