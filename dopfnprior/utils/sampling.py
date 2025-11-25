@@ -10,9 +10,20 @@ class DistributionSampler(ABC):
     """Abstract base class for distribution samplers."""
     
     @abstractmethod
-    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
-        """Sample a value from this distribution."""
+    def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
+        """Sample n values from this distribution."""
         pass
+    
+    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
+        """Sample just one value."""
+        singleton_tensor = self.sample_n(1, generator)
+        return singleton_tensor.item()
+    
+    def sample_shape(self, shape: Tuple[int, ...], generator: torch.Generator) -> torch.Tensor:
+        """Fully vectorized sampling for any output shape."""
+        N = int(math.prod(shape))
+        flat = self.sample_n(N, generator=generator)
+        return flat.reshape(shape)
 
 
 class FixedSampler(DistributionSampler):
@@ -20,9 +31,6 @@ class FixedSampler(DistributionSampler):
     
     def __init__(self, value: Any):
         self.value = value
-    
-    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
-        return self.value
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         return torch.full((n,), self.value)
@@ -53,18 +61,6 @@ class TorchDistributionSampler(DistributionSampler):
 
         return value
     
-    def sample_shape(self, shape: Tuple[int, ...], generator: torch.Generator) -> torch.Tensor:
-        """
-        Fully vectorized sampling for any output shape.
-        """
-        N = int(math.prod(shape))
-        flat = self.sample_n(N, generator=generator)
-        return flat.reshape(shape)
-    
-    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
-        singleton_tensor = self.sample_n(1, generator)
-        return singleton_tensor.item()
-    
 
 class CategoricalSampler(DistributionSampler):
     """Categorical (choice) sampler using torch.distributions."""
@@ -94,15 +90,10 @@ class CategoricalSampler(DistributionSampler):
             indices = [self.categorical.sample() for _ in range(n)]
         
         return [self.choices[int(idx.item())] for idx in indices]
-    
-    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
-        singleton_list = self.sample_n(1, generator)
-        return singleton_list[0]
 
 
 class DiscreteUniformSampler(DistributionSampler):
     """Discrete uniform distribution sampler (integers) using torch."""
-    
     def __init__(self, low: int, high: int):
         self.low = low
         self.high = high
@@ -123,9 +114,20 @@ class DiscreteUniformSampler(DistributionSampler):
         
         return values
     
-    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
-        singleton_tensor = self.sample_n(1, generator)
-        return singleton_tensor.item()
+
+class LogarithmicSampler(DistributionSampler):
+    """
+    Sample from the interval [low, high] in such a way that
+    log of sample is chosen uniformly from [log(low), log(high)].
+    """
+    def __init__(self, low: float, high: float):
+        log_low = math.log(low)
+        log_high = math.log(high)
+        self.uniform_sampler = TorchDistributionSampler(dist.Uniform(low=log_low, high=log_high))
+    
+    def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
+        log_sample = self.uniform_sampler.sample_n(n, generator)
+        return torch.exp(log_sample)
     
 
 DISTRIBUTION_FACTORIES = {
@@ -151,7 +153,11 @@ DISTRIBUTION_FACTORIES = {
     "categorical": lambda params: CategoricalSampler(
             params["choices"], params.get("probabilities")
     ),
-    "discrete_uniform": lambda params: DiscreteUniformSampler(params["low"], params["high"]),
+    "discrete_uniform": lambda params: DiscreteUniformSampler(
+        params["low"], params["high"]),
+    "logarithmic": lambda params: LogarithmicSampler(
+        params["low"], params["high"]
+    ),
 }
 
 
