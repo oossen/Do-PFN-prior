@@ -13,8 +13,7 @@ class SCMBuilder:
     Builder class for creating Structural Causal Models (SCMs) with configurable hyperparameters.
     
     This class provides a comprehensive interface for building SCMs with various mechanism types,
-    noise distributions, and graph structures. All hyperparameters are explicitly specified in
-    the constructor rather than being sampled randomly.
+    noise distributions, and graph structures.
     
     Constructor parameters
     ----------------------
@@ -31,9 +30,9 @@ class SCMBuilder:
     
     # Noise Distribution Parameters
     root_std : float
-        The standard deviation used to sample noise of root nodes.
+        The mean standard deviation used to sample noise of root nodes.
     non_root_std : float
-        The standard deviation used to sample noise of non-root nodes.
+        The mean standard deviation used to sample noise of non-root nodes.
     """
     
     def __init__(
@@ -76,7 +75,7 @@ class SCMBuilder:
         
         # Step 2: Create noise distributions
         # Note that creation of the distributions is deterministic and requires no generator
-        noise = self._create_noise_distribution()
+        noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
         scm = SCM(self.graph, mechanisms, noise)
@@ -99,10 +98,19 @@ class SCMBuilder:
         
         return mechanisms
     
-    def _create_noise_distribution(self) -> Dict[int, TorchDistributionSampler]:
+    def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Dict[int, TorchDistributionSampler]:
         """Create noise distributions for exogenous and endogenous variables."""
         root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
         non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
-        noise = {v: TorchDistributionSampler(dist.Normal(loc=0.0, scale=self.root_std)) for v in root_nodes} | \
-                {v: TorchDistributionSampler(dist.Normal(loc=0.0, scale=self.non_root_std)) for v in non_root_nodes}
+        root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.root_std))
+        non_root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.non_root_std))
+        
+        noise = {}
+        for v in root_nodes:
+            std = root_std_gen.sample(generator)
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=0.0, scale=std))
+        for v in non_root_nodes:
+            std = non_root_std_gen.sample(generator) 
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=0.0, scale=std))
+
         return noise
