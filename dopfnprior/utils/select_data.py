@@ -2,6 +2,7 @@ from typing import Dict, Optional, Tuple
 import torch
 
 
+@torch.no_grad()
 def select_features(data: Dict[int, torch.Tensor],
                     dropout_prob: float,
                     generator: Optional[torch.Generator]
