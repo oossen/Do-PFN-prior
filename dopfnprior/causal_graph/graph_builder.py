@@ -12,7 +12,7 @@ class GraphBuilder:
     a random topological order (random permutation).
     """
 
-    def __init__(self, num_nodes: int, edge_prob: float) -> None:
+    def __init__(self, num_nodes: int, edge_prob: float, dropout_prob: float) -> None:
         """
         Parameters
         ----------
@@ -21,15 +21,18 @@ class GraphBuilder:
         edge_prob : float
             Probability of an edge between any ordered pair (i < j) in a random
             topological order. Must be in [0, 1].
+        dropout_prob : float
+            Probability of making a given node hidden.
         """
         self.num_nodes = num_nodes
         # Set a minimum probability to avoid very sparse small graphs
         # 2 -> 87%, 3 -> 54%, 5 -> 28%, 10 -> 13%, 20 -> 5% 30 -> 3%
         edge_prob_min = 2 / (num_nodes ** 1.2)
         self.edge_prob = max(edge_prob_min, edge_prob) 
+        self.dropout_prob = dropout_prob
 
 
-    def sample_ER_DAG(self, generator: Optional[torch.Generator]) -> nx.DiGraph:
+    def sample_graph(self, generator: Optional[torch.Generator]) -> nx.DiGraph:
         """
         Create a random DAG.
 
@@ -52,6 +55,8 @@ class GraphBuilder:
             raise ValueError("num_nodes must be non-negative.")
         if not (0.0 <= self.edge_prob <= 1.0):
             raise ValueError("p must be in [0, 1].")
+        if not (0.0 <= self.dropout_prob <= 1.0):
+            raise ValueError("dropout_prob must be in [0, 1].")
 
         G = nx.DiGraph()
         G.add_nodes_from(range(n))
@@ -71,7 +76,31 @@ class GraphBuilder:
             
         # resample if there are no edges
         if len(G.edges) == 0:
-            return self.sample_ER_DAG(generator)
+            return self.sample_graph(generator)
+        
+        # Hide some nodes
+        attribute_dict = {
+            v: torch.rand(1, generator=generator) < self.dropout_prob 
+            for v in G.nodes()
+        }
+        nx.set_node_attributes(G, attribute_dict, name="hidden")
+        
+        # select target and rename
+        visible_nodes = [v for v in G.nodes if not G.nodes[v]["hidden"]]
+        # resample if less than 2 visible nodes
+        if len(visible_nodes) < 2:
+            return self.sample_graph(generator)
+        hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
+        target_node_idx = int(torch.randint(0, len(visible_nodes), (1,), generator=generator))
+        target_node = visible_nodes[target_node_idx]
+        renaming = {}
+        for v in hidden_nodes:
+            renaming[v] = f"u{str(v)}"
+        for v in visible_nodes:
+            if v != target_node:    
+                renaming[v] = f"x{str(v)}"
+        renaming[target_node] = "y"
+        G = nx.relabel_nodes(G, renaming)
 
         return G
 

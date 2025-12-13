@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader
 from dopfnprior.causal_graph.graph_builder import GraphBuilder
 from dopfnprior.scm.scm_builder import SCMBuilder
 from dopfnprior.utils.sampling import sample_parameters, build_samplers
-from dopfnprior.utils.select_data import select_features
 
 
 class ObservationalDataLoader(DataLoader):
@@ -62,7 +61,7 @@ class ObservationalDataLoader(DataLoader):
         # sample graph
         graph_params = sample_parameters(self.graph_samplers, "graph", self.generator)
         graph_builder = GraphBuilder(**graph_params)
-        graph = graph_builder.sample_ER_DAG(self.generator)
+        graph = graph_builder.sample_graph(self.generator)
             
         # sample SCM
         scm_params = sample_parameters(self.scm_samplers, "scm", self.generator)
@@ -79,13 +78,12 @@ class ObservationalDataLoader(DataLoader):
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
         data = scm.propagate(sample_shape)
-        X, y = select_features(data, dataset_params["dropout_prob"], self.generator)
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}
-        full_data['x'] = X
-        full_data['y'] = y.unsqueeze(-1)
-        full_data['target_y'] = y.unsqueeze(-1) # required by the current NanoTabPFN train loop
+        full_data['x'] = torch.cat([data[v] for v in data.keys() if v != 'y'], dim=2)  # shape (B, N, F)
+        full_data['y'] = data['y']
+        full_data['target_y'] = full_data['y'] # required by the current NanoTabPFN train loop
         full_data['single_eval_pos'] = num_train_samples
         
         return full_data

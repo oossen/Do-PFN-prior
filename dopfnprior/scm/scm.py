@@ -96,7 +96,9 @@ class SCM:
             if v in self._fixed:
                 eps_v = self._fixed[v].to(device=self.device, dtype=self.dtype)
 
-            y = mech(parents_feat, eps=eps_v)
-            xs[v] = y
+            x = mech(parents_feat, eps=eps_v)
+            xs[v] = x
 
+        # only return data for non-hidden nodes
+        xs = {v: x for v, x in xs.items() if not self.dag.nodes[v].get("hidden", False)}
         return xs
