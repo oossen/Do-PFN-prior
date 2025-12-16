@@ -93,6 +93,9 @@ class GraphBuilder:
         hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
         target_node_idx = int(torch.randint(0, len(visible_nodes), (1,), generator=generator))
         target_node = visible_nodes[target_node_idx]
+        # resample if target node is isolated
+        if G.in_degree(target_node) == 0 or G.out_degree(target_node) == 0:
+            return self.sample_graph(generator)
         renaming = {}
         for v in hidden_nodes:
             renaming[v] = f"u{str(v)}"
