@@ -75,14 +75,16 @@ class SCMBuilder:
             A fully configured Structural Causal Model ready for sampling.
         """
         # Step 1: Create mechanisms for each node
-        mechanisms = self._create_mechanisms(generator)
+        if not hasattr(self, 'mechanisms'):
+            self.mechanisms = self._create_mechanisms(generator)
         
         # Step 2: Create noise distributions
         # Note that creation of the distributions is deterministic and requires no generator
-        noise = self._create_noise_distribution(generator)
+        if not hasattr(self, 'noise'):
+            self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
-        scm = SCM(self.graph, mechanisms, noise)
+        scm = SCM(self.graph, self.mechanisms, self.noise)
         
         return scm
     
