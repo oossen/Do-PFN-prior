@@ -50,6 +50,8 @@ class SCMBuilder:
         # noise parameters
         root_std: float = 1.0,
         non_root_std: float = 0.1,
+        root_mean: float = 0.0,
+        non_root_mean: float = 0.0,
     ) -> None:
         # Store all parameters
         self.graph = graph
@@ -60,6 +62,8 @@ class SCMBuilder:
         
         self.root_std = root_std
         self.non_root_std = non_root_std
+        self.root_mean = root_mean if root_mean is not None else 0.0
+        self.non_root_mean = non_root_mean if non_root_mean is not None else 0.0
     
     def build(self, generator: torch.Generator) -> SCM:
         """
@@ -108,9 +112,9 @@ class SCMBuilder:
         noise = {}
         for v in root_nodes:
             std = root_std_gen.sample(generator)
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=0.0, scale=std))
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=std))
         for v in non_root_nodes:
             std = non_root_std_gen.sample(generator) 
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=0.0, scale=std))
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=std))
 
         return noise
