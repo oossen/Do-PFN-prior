@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dopfnprior"
-version = "0.2.8"
+version = "0.2.8.1"
 authors = [
     { name = "Ole Ossen", email = "ole.ossen@gmail.com" },
 ]
