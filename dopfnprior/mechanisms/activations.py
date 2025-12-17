@@ -6,15 +6,23 @@ import torch.nn as nn
 
 class StdScaleLayer(nn.Module):
     """
-    Perform standard scaling on the input tensor.
+    Standard scaling layer that normalizes input features.
+    Computes mean and standard deviation on the first batch and uses these
+    statistics to normalize subsequent inputs using (x - mean) / std.
+    The statistics are computed along dimension 1, the data sample dimension.
     """
+    def __init__(self):
+        super().__init__()
+        self.mean = None
+        self.std = None
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        mean = x.mean(dim=1, keepdim=True)
-        std = x.std(dim=1, keepdim=True) + 1e-6
-        
-        out = (x - mean) / std
-        return torch.asinh(out)
+        # fit the info on the first batch
+        if self.mean is None or self.std is None:
+            self.mean = x.mean(dim=1, keepdim=True)
+            self.std = x.std(dim=1, keepdim=True) + 1e-6
+
+        return (x - self.mean) / self.std
 
 
 class SquareActivation(nn.Module):
