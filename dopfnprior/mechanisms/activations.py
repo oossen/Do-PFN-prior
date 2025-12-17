@@ -28,7 +28,7 @@ class StdRandomScaleFactory:
         self.individual = individual
 
     def __call__(self):
-        return nn.Sequential(self.act_class(), StdScaleLayer())
+        return nn.Sequential(StdScaleLayer(), self.act_class())
 
 
 def get_activations(scale: bool = True):
