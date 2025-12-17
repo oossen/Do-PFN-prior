@@ -21,8 +21,10 @@ class StdScaleLayer(nn.Module):
         if self.mean is None or self.std is None:
             self.mean = x.mean(dim=1, keepdim=True)
             self.std = x.std(dim=1, keepdim=True) + 1e-6
+            
+        out = (x - self.mean) / self.std
 
-        return (x - self.mean) / self.std
+        return torch.asinh(out)
 
 
 class SquareActivation(nn.Module):
