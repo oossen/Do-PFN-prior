@@ -116,13 +116,14 @@ class LogarithmicSampler(DistributionSampler):
     log of sample is chosen uniformly from [log(low), log(high)].
     """
     def __init__(self, low: float, high: float):
-        log_low = math.log(low)
-        log_high = math.log(high)
-        self.uniform_sampler = TorchDistributionSampler(dist.Uniform(low=log_low, high=log_high))
+        self.log_low = math.log(low)
+        self.log_high = math.log(high)
+        self.uniform_sampler = TorchDistributionSampler(dist.Uniform(low=self.log_low, high=self.log_high))
         
     def log_prob(self, value: torch.Tensor) -> float:
-        log_value = torch.log(value)
-        return self.uniform_sampler.log_prob(log_value)
+        # density of log-uniform distribution is 1/(x * (log(b) - log(a))) for x in [a, b]
+        log_probs = -torch.log(value) - math.log(self.log_high - self.log_low)
+        return log_probs.sum().item()
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         log_sample = self.uniform_sampler.sample_n(n, generator)
