@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import math
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union, overload
 
 import torch
 import torch.distributions as dist
@@ -204,7 +204,16 @@ def build_samplers(config: Dict[str, Any],
             raise ValueError(f"Missing required {config_name} parameters: {missing_params}")
 
     return samplers
-    
+
+@overload
+def sample_parameters(samplers: Dict[str, Any], 
+                      generator: Optional[torch.Generator]=None, 
+                      return_log_prob: Literal[False] = False) -> Dict[str, Any]: ...
+
+@overload
+def sample_parameters(samplers: Dict[str, Any], 
+                      generator: Optional[torch.Generator]=None, 
+                      return_log_prob: Literal[True] = True) -> Tuple[Dict[str, Any], float]: ...
 
 def sample_parameters(samplers: Dict[str, Any], 
                       generator: Optional[torch.Generator]=None, 
