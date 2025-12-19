@@ -1,4 +1,5 @@
-from typing import Optional
+import math
+from typing import Literal, Optional, Tuple, Union, overload
 
 import numpy as np
 import networkx as nx
@@ -32,7 +33,13 @@ class GraphBuilder:
         self.dropout_prob = dropout_prob
 
 
-    def sample_graph(self, generator: Optional[torch.Generator]) -> nx.DiGraph:
+    @overload
+    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: Literal[False] = False) -> nx.DiGraph: ...
+    
+    @overload
+    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: Literal[True] = True) -> Tuple[nx.DiGraph, float]: ...
+    
+    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: bool = False) -> Union[nx.DiGraph, Tuple[nx.DiGraph, float]]:
         """
         Create a random DAG.
 
@@ -105,6 +112,21 @@ class GraphBuilder:
         renaming[target_node] = "y"
         G = nx.relabel_nodes(G, renaming)
 
+        if return_log_prob:
+            # uniformly choosing a permutation
+            log_prob = -math.lgamma(self.num_nodes + 1)
+            # choosing edges
+            n_edges = np.sum(mask)
+            total_edges = n * (n - 1) // 2
+            log_prob += n_edges * math.log(self.edge_prob) + (total_edges - n_edges) * math.log(1 - self.edge_prob)
+            # choosing hidden nodes
+            n_visible_nodes = len(visible_nodes)
+            log_prob += n_visible_nodes * math.log(1 - self.dropout_prob) + (self.num_nodes - n_visible_nodes) * math.log(self.dropout_prob)
+            # choosing target
+            log_prob += -math.log(len(visible_nodes))
+            
+            return G, log_prob
+        
         return G
 
     
