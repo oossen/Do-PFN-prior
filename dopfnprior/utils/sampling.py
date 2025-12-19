@@ -92,7 +92,7 @@ class DiscreteUniformSampler(DistributionSampler):
         in_range = (value >= self.low) & (value <= self.high)
         num_values = self.high - self.low + 1
         log_prob_value = math.log(1.0 / num_values)
-        log_probs = torch.where(in_range, torch.full_like(value, log_prob_value), torch.full_like(value, float('-inf')))
+        log_probs = torch.where(in_range, torch.full_like(value, log_prob_value, dtype=torch.float32), torch.full_like(value, float('-inf'), dtype=torch.float32))
         return log_probs.sum().item()
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
