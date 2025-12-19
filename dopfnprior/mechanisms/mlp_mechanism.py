@@ -76,7 +76,7 @@ class MLPMechanism(BaseMechanism):
                 total_log_prob += layer.log_prob()
             elif isinstance(layer, nn.Linear):
                 bound = 1 / layer.in_features**0.5
-                total_log_prob += layer.weight.numel() * math.log(1.0 / (2 * bound))
+                total_log_prob += -layer.weight.numel() * math.log(1.0 / (2 * bound))
         return total_log_prob
     
 
