@@ -120,8 +120,9 @@ class GraphBuilder:
             total_edges = n * (n - 1) // 2
             log_prob += n_edges * math.log(self.edge_prob) + (total_edges - n_edges) * math.log(1 - self.edge_prob)
             # choosing hidden nodes
-            n_visible_nodes = len(visible_nodes)
-            log_prob += n_visible_nodes * math.log(1 - self.dropout_prob) + (self.num_nodes - n_visible_nodes) * math.log(self.dropout_prob)
+            if self.dropout_prob > 0.0:
+                n_visible_nodes = len(visible_nodes)
+                log_prob += n_visible_nodes * math.log(1 - self.dropout_prob) + (self.num_nodes - n_visible_nodes) * math.log(self.dropout_prob)
             # choosing target
             log_prob += -math.log(len(visible_nodes))
             
