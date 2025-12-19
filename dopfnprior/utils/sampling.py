@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.distributions as dist
@@ -12,6 +12,14 @@ class DistributionSampler(ABC):
     @abstractmethod
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         """Sample n values from this distribution."""
+        pass
+    
+    @abstractmethod
+    def log_prob(self, value: torch.Tensor) -> float:
+        """
+        Compute log probability of the given value(s).
+        The output is float valued even if `value` is not a singleton. 
+        """
         pass
     
     def sample(self, generator: Optional[torch.Generator] = None) -> Any:
@@ -35,6 +43,12 @@ class FixedSampler(DistributionSampler):
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         return torch.full((n,), self.value)
     
+    def log_prob(self, value: torch.Tensor) -> float:
+        if torch.all(value == self.value):
+            return 0.0  # log(1)
+        else:
+            return float('-inf')  # log(0)
+    
 
 class TorchDistributionSampler(DistributionSampler):
     """
@@ -44,6 +58,10 @@ class TorchDistributionSampler(DistributionSampler):
     
     def __init__(self, distribution: dist.Distribution):
         self.distribution = distribution
+        
+    def log_prob(self, value: torch.Tensor) -> float:
+        log_probs = self.distribution.log_prob(value)
+        return log_probs.sum().item()
     
     @torch.no_grad()
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
@@ -60,36 +78,6 @@ class TorchDistributionSampler(DistributionSampler):
             value = self.distribution.sample((n,))
 
         return value
-    
-
-class CategoricalSampler(DistributionSampler):
-    """Categorical (choice) sampler using torch.distributions."""
-    
-    def __init__(self, choices: List[Any], probabilities: Optional[List[float]] = None):
-        self.choices = choices
-        if probabilities is not None:
-            if len(probabilities) != len(choices):
-                raise ValueError("Length of probabilities must match length of choices")
-            self.categorical = dist.Categorical(torch.tensor(probabilities))
-        else:
-            # Uniform probabilities
-            uniform_probs = torch.ones(len(choices)) / len(choices)
-            self.categorical = dist.Categorical(uniform_probs)
-    
-    def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> List[Any]:
-        """This method must return a list rather than a tensor, since there are no tensors over arbitrary types."""
-        if generator is not None:
-            old_generator = torch.get_rng_state()
-            torch.set_rng_state(generator.get_state())
-            try:
-                indices = [self.categorical.sample() for _ in range(n)]
-            finally:
-                generator.set_state(torch.get_rng_state())
-                torch.set_rng_state(old_generator)
-        else:
-            indices = [self.categorical.sample() for _ in range(n)]
-        
-        return [self.choices[int(idx.item())] for idx in indices]
 
 
 class DiscreteUniformSampler(DistributionSampler):
@@ -99,6 +87,13 @@ class DiscreteUniformSampler(DistributionSampler):
         self.high = high
         if high < low:
             raise ValueError(f"high ({high}) must be >= low ({low})")
+        
+    def log_prob(self, value: torch.Tensor) -> float:
+        in_range = (value >= self.low) & (value <= self.high)
+        num_values = self.high - self.low + 1
+        log_prob_value = math.log(1.0 / num_values)
+        log_probs = torch.where(in_range, torch.full_like(value, log_prob_value), torch.full_like(value, float('-inf')))
+        return log_probs.sum().item()
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         if generator is not None:
@@ -124,6 +119,10 @@ class LogarithmicSampler(DistributionSampler):
         log_low = math.log(low)
         log_high = math.log(high)
         self.uniform_sampler = TorchDistributionSampler(dist.Uniform(low=log_low, high=log_high))
+        
+    def log_prob(self, value: torch.Tensor) -> float:
+        log_value = torch.log(value)
+        return self.uniform_sampler.log_prob(log_value)
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         log_sample = self.uniform_sampler.sample_n(n, generator)
@@ -149,9 +148,6 @@ DISTRIBUTION_FACTORIES = {
     ),
     "beta": lambda params: TorchDistributionSampler(
         dist.Beta(concentration1=params["alpha"], concentration0=params["beta"])
-    ),
-    "categorical": lambda params: CategoricalSampler(
-            params["choices"], params.get("probabilities")
     ),
     "discrete_uniform": lambda params: DiscreteUniformSampler(
         params["low"], params["high"]),
@@ -210,35 +206,21 @@ def build_samplers(config: Dict[str, Any],
     return samplers
     
 
-def sample_parameters(samplers: Dict[str, Any],
-                      config_name: Optional[str]=None,
-                      generator: Optional[torch.Generator]=None,
-                      expected_types: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def sample_parameters(samplers: Dict[str, Any], 
+                      generator: Optional[torch.Generator]=None, 
+                      return_log_prob=False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], float]]:
     """Sample parameters from samplers with type validation."""
     sampled_params = {}
-
     for param_name, sampler in samplers.items():
         value = sampler.sample(generator)
-
-        # Type validation
-        if expected_types is not None:
-            expected_type = expected_types[param_name]
-            if not isinstance(value, expected_type):
-                # Try to convert if possible
-                if isinstance(expected_type, type) and expected_type is int and isinstance(value, float):
-                    value = int(value)
-                elif isinstance(expected_type, type) and expected_type is float and isinstance(value, int):
-                    value = float(value)
-                elif isinstance(expected_type, type) and expected_type is tuple and isinstance(value, list):
-                    value = tuple(value)
-                elif isinstance(expected_type, tuple) and type(None) in expected_type:
-                    # Optional parameter - check if value is one of the allowed types
-                    allowed_types = [t for t in expected_type if t is not type(None)]
-                    if value is not None and not isinstance(value, tuple(allowed_types)):
-                        raise ValueError(f"Parameter {config_name}.{param_name} has invalid type. Expected one of {expected_type}, got {type(value)}")
-                else:
-                    raise ValueError(f"Parameter {config_name}.{param_name} has invalid type. Expected {expected_type}, got {type(value)}")
-
         sampled_params[param_name] = value
+    
+    if return_log_prob:
+        total_log_prob = 0.0
+        for param_name, sampler in samplers.items():
+            value = sampled_params[param_name]
+            log_prob = sampler.log_prob(torch.tensor([value]))
+            total_log_prob += log_prob
+        return sampled_params, total_log_prob
 
     return sampled_params
