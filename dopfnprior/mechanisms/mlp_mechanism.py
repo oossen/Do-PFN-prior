@@ -1,3 +1,4 @@
+import math
 from typing import List, Optional
 import torch
 from torch import nn, Tensor
@@ -6,7 +7,7 @@ from dopfnprior.mechanisms.base_mechanism import BaseMechanism
 from dopfnprior.mechanisms.activations import RandomActivation
 
 
-class SampleMLPMechanism(BaseMechanism):
+class MLPMechanism(BaseMechanism):
     """
     Randomly-sampled MLP mechanism with a fixed (sampled) activation module.
 
@@ -34,7 +35,7 @@ class SampleMLPMechanism(BaseMechanism):
         generator: Optional[torch.Generator] = None,
     ) -> None:
         super().__init__(input_dim=input_dim, node_dim=node_dim)
-        self.gen = generator
+        self.generator = generator
 
         # use fixed number of hidden layers
         if num_hidden_layers < 0:
@@ -48,11 +49,13 @@ class SampleMLPMechanism(BaseMechanism):
         else:
             d = input_dim
             for _ in range(n_hidden):
-                act = RandomActivation(generator=self.gen)
-                layers += [_deterministic_linear_layer(d, hidden_dim, generator=self.gen), act]
+                act = RandomActivation(generator=self.generator)
+                linear_layer = _deterministic_linear_layer(d, hidden_dim, generator=self.generator)
+                layers += [linear_layer, act]
                 d = hidden_dim
-            act = RandomActivation(generator=self.gen)
-            layers += [_deterministic_linear_layer(d, node_dim, generator=self.gen), act]
+            act = RandomActivation(generator=self.generator)
+            linear_layer = _deterministic_linear_layer(d, node_dim, generator=self.generator)
+            layers += [linear_layer, act]
             self.net = nn.Sequential(*layers)
 
     def _forward(self, parents: Tensor, eps: Tensor) -> Tensor:
@@ -62,7 +65,19 @@ class SampleMLPMechanism(BaseMechanism):
         else:
             out = self.net(parents)      
         out = out + eps
-        return out 
+        return out
+    
+    def log_prob(self) -> float:
+        total_log_prob = 0.0
+        if self.net is None:
+            return total_log_prob
+        for layer in self.net:
+            if isinstance(layer, RandomActivation):
+                total_log_prob += layer.log_prob()
+            elif isinstance(layer, nn.Linear):
+                bound = 1 / layer.in_features**0.5
+                total_log_prob += layer.weight.numel() * math.log(1.0 / (2 * bound))
+        return total_log_prob
     
 
 def _deterministic_linear_layer(input_dim: int, output_dim: int, generator: Optional[torch.Generator]):

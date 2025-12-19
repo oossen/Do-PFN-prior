@@ -34,12 +34,12 @@ class GraphBuilder:
 
 
     @overload
-    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: Literal[False] = False) -> nx.DiGraph: ...
+    def sample(self, generator: Optional[torch.Generator], return_log_prob: Literal[False] = False) -> nx.DiGraph: ...
     
     @overload
-    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: Literal[True] = True) -> Tuple[nx.DiGraph, float]: ...
+    def sample(self, generator: Optional[torch.Generator], return_log_prob: Literal[True] = True) -> Tuple[nx.DiGraph, float]: ...
     
-    def sample_graph(self, generator: Optional[torch.Generator], return_log_prob: bool = False) -> Union[nx.DiGraph, Tuple[nx.DiGraph, float]]:
+    def sample(self, generator: Optional[torch.Generator], return_log_prob: bool = False) -> Union[nx.DiGraph, Tuple[nx.DiGraph, float]]:
         """
         Create a random DAG.
 
@@ -83,7 +83,7 @@ class GraphBuilder:
             
         # resample if there are no edges
         if len(G.edges) == 0:
-            return self.sample_graph(generator, return_log_prob=return_log_prob)
+            return self.sample(generator, return_log_prob=return_log_prob)
         
         # Hide some nodes
         attribute_dict = {
@@ -96,13 +96,13 @@ class GraphBuilder:
         visible_nodes = [v for v in G.nodes if not G.nodes[v]["hidden"]]
         # resample if less than 2 visible nodes
         if len(visible_nodes) < 2:
-            return self.sample_graph(generator, return_log_prob=return_log_prob)
+            return self.sample(generator, return_log_prob=return_log_prob)
         hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
         target_node_idx = int(torch.randint(0, len(visible_nodes), (1,), generator=generator))
         target_node = visible_nodes[target_node_idx]
         # resample if target node is isolated
         if G.in_degree(target_node) == 0 or G.out_degree(target_node) == 0:
-            return self.sample_graph(generator, return_log_prob=return_log_prob)
+            return self.sample(generator, return_log_prob=return_log_prob)
         renaming = {}
         for v in hidden_nodes:
             renaming[v] = f"u{str(v)}"

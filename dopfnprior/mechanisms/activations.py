@@ -1,3 +1,4 @@
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -86,3 +87,9 @@ class RandomActivation(nn.Module):
             
         # Instantiate the activation
         return activation_factory()
+    
+    def log_prob(self) -> float:
+        activations = get_activations(scale=True)
+        num_activations = len(activations)
+        log_prob_value = -math.log(num_activations)
+        return log_prob_value

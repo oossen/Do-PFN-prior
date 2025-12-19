@@ -61,12 +61,12 @@ class ObservationalDataLoader(DataLoader):
         # sample graph
         graph_params = sample_parameters(self.graph_samplers, self.generator)
         graph_builder = GraphBuilder(**graph_params)
-        graph = graph_builder.sample_graph(self.generator)
+        graph = graph_builder.sample(self.generator)
             
         # sample SCM
         scm_params = sample_parameters(self.scm_samplers, self.generator)
         scm_builder = SCMBuilder(graph, **scm_params)
-        scm = scm_builder.build(self.generator)
+        scm = scm_builder.sample(self.generator)
             
         # sample dataset parameters
         dataset_params = sample_parameters(self.dataset_samplers, self.generator)
