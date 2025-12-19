@@ -60,7 +60,7 @@ class TorchDistributionSampler(DistributionSampler):
         self.distribution = distribution
         
     def log_prob(self, value: torch.Tensor) -> float:
-        log_probs = self.distribution.log_prob(value)
+        log_probs = self.distribution.log_prob(torch.tensor([value]))
         return log_probs.sum().item()
     
     @torch.no_grad()
