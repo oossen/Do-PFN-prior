@@ -1,4 +1,5 @@
 from typing import Any, Dict, Mapping, Optional, Tuple, List
+import numpy as np
 import torch
 from torch import Tensor
 import networkx as nx
@@ -49,7 +50,7 @@ class SCM:
             self._node_dims[v] = self.mechanisms[v].node_dim
 
         # --- Fixed noise buffers
-        self._fixed: Dict[Any, Tensor] = {}
+        self._sampled_noise: Dict[Any, Tensor] = {}
     
     @torch.no_grad()
     def sample_noise(self,
@@ -72,14 +73,14 @@ class SCM:
                 e_v = torch.as_tensor(e_v)
             views[v] = e_v
 
-        self._fixed = views
+        self._sampled_noise = views
         return views
     
     @torch.no_grad()
     def set_root_values(self, assignments: Dict[Any, Tensor]):
         for v, value in assignments.items():
             assert v in self.dag.nodes, "Invalid node!"
-            self._fixed[v] = value
+            self._sampled_noise[v] = value
 
     @torch.no_grad()
     def propagate(self, sample_shape: Tuple[int, ...]) -> Dict[Any, Tensor]:
@@ -93,8 +94,8 @@ class SCM:
                 parents_feat = torch.empty(sample_shape + (0,)) # this tensor has no elements
 
             eps_v = None
-            if v in self._fixed:
-                eps_v = self._fixed[v].to(device=self.device, dtype=self.dtype)
+            if v in self._sampled_noise:
+                eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype)
 
             x = mech(parents_feat, eps=eps_v)
             xs[v] = x
@@ -102,3 +103,15 @@ class SCM:
         # only return data for non-hidden nodes
         xs = {v: x for v, x in xs.items() if not self.dag.nodes[v].get("hidden", False)}
         return xs
+    
+    torch.no_grad()
+    def log_likelihood(self, sampled_values: Dict[Any, Tensor], y_var: str) -> float:
+        """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""
+        shape = sampled_values[list(sampled_values.keys())[0]].shape
+        total_log_likelihood = 0.0
+        for idx in np.ndindex(shape):
+            log_prob = 0.0
+            for v in self._topo:
+                log_prob += self.noise[v].log_prob(sampled_values[v][idx])
+            total_log_likelihood += log_prob
+        return total_log_likelihood
