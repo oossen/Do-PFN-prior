@@ -20,8 +20,8 @@ class StdScaleLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # fit the info on the first batch
         if self.mean is None or self.std is None:
-            self.mean = x.mean(dim=1, keepdim=True)
-            self.std = x.std(dim=1, keepdim=True) + 1e-6
+            self.mean = x.mean()
+            self.std = x.std() + 1e-6
             
         out = (x - self.mean) / self.std
 

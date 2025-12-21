@@ -97,6 +97,11 @@ class SCMBuilder:
         # Step 3: Build the SCM
         scm = SCM(self.graph, self.mechanisms, self.noise)
         
+        # Step 4: Fit normalization
+        n_noise_fitting_samples = 100
+        scm.sample_noise((n_noise_fitting_samples,), generator=generator)
+        scm.propagate((n_noise_fitting_samples,))
+        
         if return_log_prob:
             total_log_prob = self.log_prob_mechanisms + self.log_prob_noise
             return scm, total_log_prob
