@@ -91,7 +91,7 @@ class SCM:
             mech = self.mechanisms[v]
             parts = [xs[p] for p in self._parents[v]]
             if len(parts) > 0:
-                parents_feat = torch.cat(parts, dim=2).to(device=self.device, dtype=self.dtype)
+                parents_feat = torch.cat(parts, dim=-1).to(device=self.device, dtype=self.dtype)
             else:
                 parents_feat = torch.empty(sample_shape + (0,)) # this tensor has no elements
 
