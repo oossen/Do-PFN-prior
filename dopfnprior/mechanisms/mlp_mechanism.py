@@ -58,13 +58,14 @@ class MLPMechanism(BaseMechanism):
             layers += [linear_layer, act]
             self.net = nn.Sequential(*layers)
 
-    def _forward(self, parents: Tensor, eps: Tensor) -> Tensor:
+    def _forward(self, parents: Tensor, eps: Optional[Tensor] = None) -> Tensor:
+        B, N, D = parents.shape
         if self.net is None:
-            B, N, D = parents.shape
             out = torch.zeros((B, N, self.node_dim), device=parents.device, dtype=parents.dtype)
         else:
-            out = self.net(parents)      
-        out = out + eps
+            out = self.net(parents)
+        if eps is not None:      
+            out = out + eps
         return out
     
     def log_prob(self) -> float:
