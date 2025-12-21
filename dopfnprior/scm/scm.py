@@ -1,8 +1,10 @@
+import math
 from typing import Any, Dict, Mapping, Optional, Tuple, List
 import numpy as np
 import torch
 from torch import Tensor
 import networkx as nx
+from scipy.integrate import quad
 
 from dopfnprior.mechanisms.base_mechanism import BaseMechanism
 
@@ -105,25 +107,41 @@ class SCM:
         return xs
     
     torch.no_grad()
-    def log_likelihood(self, sampled_values: Dict[Any, Tensor], y_var: str) -> float:
-        """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""
-        # Propagate sampled values through the SCM and compute noise
+    def log_likelihood(self, values: Dict[Any, Tensor], y_var: str) -> float:
+        """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""          
+        shape = values[list(values.keys())[0]].shape
+        total_log_likelihood = 0.0
+        
+        for idx in np.ndindex(shape):
+            values_i = {v: values[v][idx] for v in values}
+            joint_log_likelihood = self.total_log_probability(values_i)
+            
+            def integrand(y):
+                log_prob = 0.0
+                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
+                log_prob = self.total_log_probability(values_i)
+                return math.exp(log_prob)
+            
+            marginal = quad(integrand, -np.inf, np.inf)[0]
+            log_marginal = math.log(marginal)
+            total_log_likelihood += joint_log_likelihood - log_marginal
+
+        return total_log_likelihood
+    
+    def total_log_probability(self, values: Dict[Any, Tensor]) -> float:
+        """
+        Compute the probability of the provided values under the SCM,
+        using the mechanisms saved in `self.mechanisms`.
+        """
+        log_prob = 0.0
         sampled_noise = {}
         for v in self._topo:
             if self._is_root[v]:
-                sampled_noise[v] = sampled_values[v]
+                sampled_noise[v] = values[v]
             else:
                 mech = self.mechanisms[v]
-                parts = [sampled_values[p] for p in self._parents[v]]
-                parents_feat = torch.cat(parts, dim=2).to(device=self.device, dtype=self.dtype)
-                y = mech(parents_feat, eps=None)
-                sampled_noise[v] = sampled_values[v] - y
-        # compute log likelhood sample-wise
-        shape = sampled_values[list(sampled_values.keys())[0]].shape
-        total_log_likelihood = 0.0
-        for idx in np.ndindex(shape):
-            log_prob = 0.0
-            for v in self._topo:
-                log_prob += self.noise[v].log_prob(sampled_noise[v][idx])
-            total_log_likelihood += log_prob
-        return total_log_likelihood
+                parents_feat = torch.tensor([values[p] for p in self._parents[v]])
+                x = mech(parents_feat, eps=None)
+                sampled_noise[v] = values[v] - x
+                log_prob += self.noise[v].log_prob(sampled_noise[v])
+        return log_prob

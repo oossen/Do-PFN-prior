@@ -45,30 +45,26 @@ class BaseMechanism(ABC, nn.Module):
         """
         Parameters
         ----------
-        parents : tensor of shape (B, N, D)
-        eps : tensor of shape (B, N, E)
+        parents : tensor of shape (*, D)
+        eps : tensor of shape (*, E)
         
         where
         D = input_dim, possibly 0
         E = node_dim
+        typically, * = (B, N)
         """
-        if parents.dim() != 3:
-            raise ValueError(f"{self.__class__.__name__}: parents must be 3D (B, N, D). Got {tuple(parents.shape)}.")
-        B, N, D = parents.shape
+        D = parents.shape[-1]
         E = self.node_dim
         
         if D != self.input_dim:
             raise ValueError(f"{self.__class__.__name__}: expected D={self.input_dim}, got D={D}.")
 
-        if eps is not None:
-            if eps.dim() != 3:
-                raise ValueError(f"{self.__class__.__name__}: noise must be 3D (B, N, E). Got {tuple(eps.shape)}.")
-            if (B, N, E) != eps.shape:
-                raise ValueError(f"{self.__class__.__name__}: expected (B, N, E)={(B, N, E)}, got {eps.shape}.")
+        expected_out = parents.shape[:-1] + (E,)
+        if eps is not None and expected_out != eps.shape:
+            raise ValueError(f"{self.__class__.__name__}: expected (B, N, E)={expected_out}, got {eps.shape}.")
 
         y = self._forward(parents, eps)
 
-        expected_out = (B, N, E)
         if tuple(y.shape) != expected_out:
             raise ValueError(
                 f"{self.__class__.__name__}: expected output {expected_out}, got {tuple(y.shape)}."
