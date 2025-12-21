@@ -107,11 +107,23 @@ class SCM:
     torch.no_grad()
     def log_likelihood(self, sampled_values: Dict[Any, Tensor], y_var: str) -> float:
         """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""
+        # Propagate sampled values through the SCM and compute noise
+        sampled_noise = {}
+        for v in self._topo:
+            if self._is_root[v]:
+                sampled_noise[v] = sampled_values[v]
+            else:
+                mech = self.mechanisms[v]
+                parts = [sampled_values[p] for p in self._parents[v]]
+                parents_feat = torch.cat(parts, dim=2).to(device=self.device, dtype=self.dtype)
+                y = mech(parents_feat, eps=None)
+                sampled_noise[v] = sampled_values[v] - y
+        # compute log likelhood sample-wise
         shape = sampled_values[list(sampled_values.keys())[0]].shape
         total_log_likelihood = 0.0
         for idx in np.ndindex(shape):
             log_prob = 0.0
             for v in self._topo:
-                log_prob += self.noise[v].log_prob(sampled_values[v][idx])
+                log_prob += self.noise[v].log_prob(sampled_noise[v][idx])
             total_log_likelihood += log_prob
         return total_log_likelihood
