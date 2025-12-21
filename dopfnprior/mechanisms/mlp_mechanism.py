@@ -59,9 +59,9 @@ class MLPMechanism(BaseMechanism):
             self.net = nn.Sequential(*layers)
 
     def _forward(self, parents: Tensor, eps: Optional[Tensor] = None) -> Tensor:
-        B, N, D = parents.shape
+        out_shape = parents.shape[:-1] + (self.node_dim,)
         if self.net is None:
-            out = torch.zeros((B, N, self.node_dim), device=parents.device, dtype=parents.dtype)
+            out = torch.zeros(out_shape, device=parents.device, dtype=parents.dtype)
         else:
             out = self.net(parents)
         if eps is not None:      
