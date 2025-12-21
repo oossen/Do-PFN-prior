@@ -55,15 +55,16 @@ class BaseMechanism(ABC, nn.Module):
         if parents.dim() != 3:
             raise ValueError(f"{self.__class__.__name__}: parents must be 3D (B, N, D). Got {tuple(parents.shape)}.")
         B, N, D = parents.shape
+        E = self.node_dim
+        
         if D != self.input_dim:
             raise ValueError(f"{self.__class__.__name__}: expected D={self.input_dim}, got D={D}.")
 
         if eps is not None:
             if eps.dim() != 3:
                 raise ValueError(f"{self.__class__.__name__}: noise must be 3D (B, N, E). Got {tuple(eps.shape)}.")
-            B, N, E = eps.shape
-            if E != self.node_dim:
-                raise ValueError(f"{self.__class__.__name__}: expected E={self.node_dim}, got E={E}.")
+            if (B, N, E) != eps.shape:
+                raise ValueError(f"{self.__class__.__name__}: expected (B, N, E)={(B, N, E)}, got {eps.shape}.")
 
         y = self._forward(parents, eps)
 
