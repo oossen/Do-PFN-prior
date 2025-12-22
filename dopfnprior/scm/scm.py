@@ -106,7 +106,7 @@ class SCM:
         xs = {v: x for v, x in xs.items() if not self.dag.nodes[v].get("hidden", False)}
         return xs
     
-    torch.no_grad()
+    @torch.no_grad()
     def log_likelihood(self, values: Dict[Any, Tensor], y_var: str) -> float:
         """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""          
         shape = values[list(values.keys())[0]].shape
@@ -128,6 +128,7 @@ class SCM:
 
         return total_log_likelihood
     
+    @torch.no_grad()
     def total_log_probability(self, values: Dict[Any, Tensor]) -> float:
         """
         Compute the probability of the provided values under the SCM,
