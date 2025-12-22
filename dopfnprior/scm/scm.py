@@ -1,10 +1,11 @@
 import math
-from typing import Any, Dict, Mapping, Optional, Tuple, List
+from typing import Any, Dict, Mapping, Optional, Tuple, List, cast
 import numpy as np
 import torch
 from torch import Tensor
 import networkx as nx
 from scipy.integrate import quad
+from scipy.optimize import minimize_scalar
 
 from dopfnprior.mechanisms.base_mechanism import BaseMechanism
 
@@ -117,12 +118,15 @@ class SCM:
             joint_log_likelihood = self.total_log_probability(values_i)
             
             def integrand(y):
-                log_prob = 0.0
                 values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
                 log_prob = self.total_log_probability(values_i)
                 return math.exp(log_prob)
             
-            marginal = quad(integrand, -10.0, 10.0)[0]
+            # find maximum and integrate around it
+            res = minimize_scalar(lambda y: -integrand(y))
+            maximum = cast(float, res.x)
+            a, b = maximum - 2.0, maximum + 2.0
+            marginal = quad(integrand, a, b, points=[maximum])[0]
             log_marginal = math.log(marginal)
             total_log_likelihood += joint_log_likelihood - log_marginal
 
