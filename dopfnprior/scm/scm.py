@@ -148,5 +148,5 @@ class SCM:
                 parents_feat = torch.tensor([values[p] for p in self._parents[v]])
                 x = mech(parents_feat, eps=None)
                 sampled_noise[v] = values[v] - x
-                log_prob += self.noise[v].log_prob(sampled_noise[v])
+            log_prob += self.noise[v].log_prob(sampled_noise[v])
         return log_prob
