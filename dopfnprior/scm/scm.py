@@ -122,7 +122,7 @@ class SCM:
                 log_prob = self.total_log_probability(values_i)
                 return math.exp(log_prob)
             
-            marginal = quad(integrand, -np.inf, np.inf)[0]
+            marginal = quad(integrand, -10.0, 10.0)[0]
             log_marginal = math.log(marginal)
             total_log_likelihood += joint_log_likelihood - log_marginal
 
