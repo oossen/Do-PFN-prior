@@ -124,8 +124,8 @@ class SCM:
             
             # find maximum and integrate around it
             res = minimize_scalar(lambda y: -integrand(y))
-            maximum = cast(float, res.x)
-            a, b = maximum - 2.0, maximum + 2.0
+            maximum: float = cast(float, res.x)
+            a, b = maximum - 10.0, maximum + 10.0
             marginal = quad(integrand, a, b, points=[maximum])[0]
             log_marginal = math.log(marginal)
             total_log_likelihood += joint_log_likelihood - log_marginal
