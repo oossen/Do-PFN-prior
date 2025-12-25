@@ -98,8 +98,7 @@ class GraphBuilder:
         if len(visible_nodes) < 2:
             return self.sample(generator, return_log_prob=return_log_prob)
         hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
-        target_node_idx = int(torch.randint(0, len(visible_nodes), (1,), generator=generator))
-        target_node = visible_nodes[target_node_idx]
+        target_node = visible_nodes[-1]
         # resample if target node is isolated
         if G.in_degree(target_node) == 0 or G.out_degree(target_node) == 0:
             return self.sample(generator, return_log_prob=return_log_prob)
@@ -123,8 +122,6 @@ class GraphBuilder:
             if self.dropout_prob > 0.0:
                 n_visible_nodes = len(visible_nodes)
                 log_prob += n_visible_nodes * math.log(1 - self.dropout_prob) + (self.num_nodes - n_visible_nodes) * math.log(self.dropout_prob)
-            # choosing target
-            log_prob += -math.log(len(visible_nodes))
             
             return G, log_prob
         
