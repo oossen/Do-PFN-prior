@@ -3,11 +3,11 @@ from typing import Any, Dict, Mapping, Optional, Tuple, List, cast
 import numpy as np
 import torch
 from torch import Tensor
-import torch.nn as nn
 import networkx as nx
 from scipy.integrate import quad
 from scipy.optimize import minimize_scalar
 
+from dopfnprior.mechanisms.base_mechanism import BaseMechanism
 
 
 class SCM:
@@ -31,7 +31,7 @@ class SCM:
     def __init__(
         self,
         dag: nx.DiGraph,
-        mechanisms: Mapping[Any, nn.Module],
+        mechanisms: Mapping[Any, BaseMechanism],
         noise: Mapping,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
@@ -46,6 +46,11 @@ class SCM:
         self._topo: List = list(nx.topological_sort(dag))
         self._parents: Dict[Any, List] = {v: list(self.dag.predecessors(v)) for v in self._topo}
         self._is_root: Dict[Any, bool] = {v: (len(self._parents[v]) == 0) for v in self._topo}
+
+        # --- Node dimensions
+        self._node_dims: Dict[Any, int] = {}
+        for v in self._topo:
+            self._node_dims[v] = self.mechanisms[v].node_dim
 
         # --- Fixed noise buffers
         self._sampled_noise: Dict[Any, Tensor] = {}
@@ -64,22 +69,36 @@ class SCM:
         target_nodes = nodes if nodes is not None else self._topo
         views: Dict[Any, Tensor] = {}
         for v in target_nodes:
+            dv = self._node_dims[v]
             dist_v = self.noise.get(v, None)
-            e_v = dist_v.sample_shape(sample_shape, generator=generator)
+            e_v = dist_v.sample_shape(sample_shape + (dv,), generator=generator)
             if not isinstance(e_v, Tensor):
                 e_v = torch.as_tensor(e_v)
             views[v] = e_v
 
         self._sampled_noise = views
         return views
+    
+    @torch.no_grad()
+    def set_root_values(self, assignments: Dict[Any, Tensor]):
+        for v, value in assignments.items():
+            assert v in self.dag.nodes, "Invalid node!"
+            self._sampled_noise[v] = value
 
     @torch.no_grad()
     def propagate(self, sample_shape: Tuple[int, ...]) -> Dict[Any, Tensor]:
         xs: Dict[Any, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
-            parents_feat = {v: xs[p] for p in self._parents[v]}
-            eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype) if v in self._sampled_noise else None
+            parts = [xs[p] for p in self._parents[v]]
+            if len(parts) > 0:
+                parents_feat = torch.cat(parts, dim=-1).to(device=self.device, dtype=self.dtype)
+            else:
+                parents_feat = torch.empty(sample_shape + (0,)) # this tensor has no elements
+
+            eps_v = None
+            if v in self._sampled_noise:
+                eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype)
 
             x = mech(parents_feat, eps=eps_v)
             xs[v] = x

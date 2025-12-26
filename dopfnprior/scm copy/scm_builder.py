@@ -5,7 +5,7 @@ import torch.distributions as dist
 import networkx as nx
 
 from dopfnprior.scm.scm import SCM
-from dopfnprior.mechanisms.simple_mechanism import SimpleMechanism
+from dopfnprior.mechanisms.mlp_mechanism import MLPMechanism
 from dopfnprior.utils.sampling import TorchDistributionSampler
 
 
@@ -20,6 +20,14 @@ class SCMBuilder:
     ----------------------
     graph: nx.DiGraph
         The directed acyclic graph underlying this SCM.
+    node_dim : int
+        The feature dimension of all nodes.
+    
+    # MLP Mechanism Hyperparameters
+    mlp_num_hidden_layers : int, default 0
+        Fixed number of hidden layers for MLP mechanisms.
+    mlp_hidden_dim : int, default 16
+        Width of hidden layers for MLP mechanisms.
     
     # Noise Distribution Parameters
     root_std : float
@@ -37,6 +45,13 @@ class SCMBuilder:
         # the underlying graph
         graph: nx.DiGraph,
         *,
+        # the dimension of each node
+        node_dim: int = 1,
+        
+        # MLP Mechanism Hyperparameters
+        mlp_num_hidden_layers: int = 0,
+        mlp_hidden_dim: int = 16,
+        
         # noise parameters
         root_std: float = 1.0,
         non_root_std: float = 0.1,
@@ -45,6 +60,11 @@ class SCMBuilder:
     ) -> None:
         # Store all parameters
         self.graph = graph
+        self.node_dim = node_dim
+        
+        self.mlp_num_hidden_layers = mlp_num_hidden_layers
+        self.mlp_hidden_dim = mlp_hidden_dim
+        
         self.root_std = root_std
         self.non_root_std = non_root_std
         self.root_mean = root_mean if root_mean is not None else 0.0
@@ -67,8 +87,7 @@ class SCMBuilder:
         """
         # Step 1: Create mechanisms for each node
         if not hasattr(self, 'mechanisms'):
-            nodes = self.graph.nodes
-            self.mechanisms = {v: SimpleMechanism(list(nodes), generator) for v in nodes}
+            self.mechanisms, self.log_prob_mechanisms = self._create_mechanisms(generator)
         
         # Step 2: Create noise distributions
         # Note that creation of the distributions is deterministic and requires no generator
@@ -84,9 +103,27 @@ class SCMBuilder:
         scm.propagate((n_noise_fitting_samples,))
         
         if return_log_prob:
-            return scm, self.log_prob_noise
+            total_log_prob = self.log_prob_mechanisms + self.log_prob_noise
+            return scm, total_log_prob
         else:
             return scm
+    
+    def _create_mechanisms(self, generator: Optional[torch.Generator]) -> Tuple[Dict[Any, MLPMechanism], float]:
+        """Create mechanisms for each node in the DAG."""
+        mechanisms = {}
+        log_prob = 0.0
+        for node in self.graph.nodes():
+            input_dim = len(list(self.graph.predecessors(node))) * self.node_dim
+            mechanisms[node] = MLPMechanism(
+                input_dim=input_dim,
+                node_dim=self.node_dim,
+                num_hidden_layers=self.mlp_num_hidden_layers,
+                hidden_dim=self.mlp_hidden_dim,
+                generator=generator,
+            )
+            log_prob += mechanisms[node].log_prob()
+        
+        return mechanisms, log_prob
     
     def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Tuple[Dict[Any, TorchDistributionSampler], float]:
         """Create noise distributions for exogenous and endogenous variables."""
