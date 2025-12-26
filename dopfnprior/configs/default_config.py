@@ -39,22 +39,6 @@ prior_config = {
     },
 
     "scm_config": {    
-        # number of features contained in each node
-        # int
-        "node_dim": {
-            "value": 1
-        },
-        # number of hidden layers in MLP mechanisms
-        # int, >= 0
-        "mlp_num_hidden_layers": {
-            "value": 0
-        },
-        # number of hidden units in each layer of an MLP mechanism
-        # int
-        "mlp_hidden_dim": {
-            "distribution": "discrete_uniform",
-            "distribution_parameters": {"low": 8, "high": 32}
-        },
         # the standard deviation of noise sampled at root nodes when propagating through the SCM
         # float
         "root_std": {
