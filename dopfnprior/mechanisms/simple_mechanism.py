@@ -21,7 +21,7 @@ class SimpleMechanism(nn.Module):
         self.generator = generator
         weights_map = {}
         for v in node_names:
-            initial_value = 2 * torch.randn(1, generator=self.generator) - 1
+            initial_value = 2 * torch.rand(1, generator=self.generator) - 1
             weights_map[v] = nn.Parameter(initial_value)
         self.weights = nn.ParameterDict(weights_map)
         self.activation = RandomActivation(generator=self.generator)
