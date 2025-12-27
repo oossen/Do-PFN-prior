@@ -31,15 +31,8 @@ class GraphBuilder:
         edge_prob_min = 2 / (num_nodes ** 1.2)
         self.edge_prob = max(edge_prob_min, edge_prob) 
         self.dropout_prob = dropout_prob
-
-
-    @overload
-    def sample(self, generator: Optional[torch.Generator], return_log_prob: Literal[False] = False) -> nx.DiGraph: ...
     
-    @overload
-    def sample(self, generator: Optional[torch.Generator], return_log_prob: Literal[True] = True) -> Tuple[nx.DiGraph, float]: ...
-    
-    def sample(self, generator: Optional[torch.Generator], return_log_prob: bool = False) -> Union[nx.DiGraph, Tuple[nx.DiGraph, float]]:
+    def sample(self, generator: Optional[torch.Generator]) -> nx.DiGraph:
         """
         Create a random DAG.
 
@@ -83,7 +76,7 @@ class GraphBuilder:
             
         # resample if there are no edges
         if len(G.edges) == 0:
-            return self.sample(generator, return_log_prob=return_log_prob)
+            return self.sample(generator)
         
         # Hide some nodes
         attribute_dict = {
@@ -96,12 +89,12 @@ class GraphBuilder:
         visible_nodes = [v for v in G.nodes if not G.nodes[v]["hidden"]]
         # resample if less than 2 visible nodes
         if len(visible_nodes) < 2:
-            return self.sample(generator, return_log_prob=return_log_prob)
+            return self.sample(generator)
         hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
         target_node = visible_nodes[-1]
         # resample if target node is isolated
         if G.in_degree(target_node) == 0 or G.out_degree(target_node) == 0:
-            return self.sample(generator, return_log_prob=return_log_prob)
+            return self.sample(generator)
         renaming = {}
         for v in hidden_nodes:
             renaming[v] = f"u{str(v)}"
@@ -110,20 +103,6 @@ class GraphBuilder:
                 renaming[v] = f"x{str(v)}"
         renaming[target_node] = "y"
         G = nx.relabel_nodes(G, renaming)
-
-        if return_log_prob:
-            # uniformly choosing a permutation
-            log_prob = -math.lgamma(self.num_nodes + 1)
-            # choosing edges
-            n_edges = np.sum(mask)
-            total_edges = n * (n - 1) // 2
-            log_prob += n_edges * math.log(self.edge_prob) + (total_edges - n_edges) * math.log(1 - self.edge_prob)
-            # choosing hidden nodes
-            if self.dropout_prob > 0.0:
-                n_visible_nodes = len(visible_nodes)
-                log_prob += n_visible_nodes * math.log(1 - self.dropout_prob) + (self.num_nodes - n_visible_nodes) * math.log(self.dropout_prob)
-            
-            return G, log_prob
         
         return G
 

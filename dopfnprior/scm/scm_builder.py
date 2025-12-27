@@ -50,13 +50,7 @@ class SCMBuilder:
         self.root_mean = root_mean if root_mean is not None else 0.0
         self.non_root_mean = non_root_mean if non_root_mean is not None else 0.0
     
-    @overload
-    def sample(self, generator: torch.Generator, return_log_prob: Literal[False] = False) -> SCM: ...
-    
-    @overload
-    def sample(self, generator: torch.Generator, return_log_prob: Literal[True] = True) -> Tuple[SCM, float]: ...
-    
-    def sample(self, generator: torch.Generator, return_log_prob: bool = False) -> Union[SCM, Tuple[SCM, float]]:
+    def sample(self, generator: torch.Generator) -> SCM:
         """
         Build and return a configured SCM based on the provided hyperparameters.
         
@@ -73,7 +67,7 @@ class SCMBuilder:
         # Step 2: Create noise distributions
         # Note that creation of the distributions is deterministic and requires no generator
         if not hasattr(self, 'noise'):
-            self.noise, self.log_prob_noise = self._create_noise_distribution(generator)
+            self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
         scm = SCM(self.graph, self.mechanisms, self.noise)
@@ -83,12 +77,9 @@ class SCMBuilder:
         scm.sample_noise((n_noise_fitting_samples,), generator=generator)
         scm.propagate((n_noise_fitting_samples,))
         
-        if return_log_prob:
-            return scm, self.log_prob_noise
-        else:
-            return scm
+        return scm
     
-    def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Tuple[Dict[Any, TorchDistributionSampler], float]:
+    def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Dict[Any, TorchDistributionSampler]:
         """Create noise distributions for exogenous and endogenous variables."""
         root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
         non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
@@ -96,14 +87,11 @@ class SCMBuilder:
         non_root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.non_root_std))
         
         noise = {}
-        log_prob = 0.0
         for v in root_nodes:
             std = root_std_gen.sample(generator)
-            log_prob += root_std_gen.log_prob(std)
             noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=std))
         for v in non_root_nodes:
             std = non_root_std_gen.sample(generator) 
-            log_prob += non_root_std_gen.log_prob(std)
             noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=std))
 
-        return noise, log_prob
+        return noise
