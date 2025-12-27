@@ -1,5 +1,4 @@
-from typing import Any, Dict, Literal, Optional, Tuple, overload
-from pyparsing import Union
+from typing import Any, Dict, Optional
 import torch
 import torch.distributions as dist
 import networkx as nx
@@ -45,10 +44,12 @@ class SCMBuilder:
     ) -> None:
         # Store all parameters
         self.graph = graph
-        self.root_std = root_std
-        self.non_root_std = non_root_std
+        self.mean_root_std = root_std
+        self.mean_non_root_std = non_root_std
         self.root_mean = root_mean if root_mean is not None else 0.0
         self.non_root_mean = non_root_mean if non_root_mean is not None else 0.0
+        self.root_std = {}
+        self.non_root_std = {}
     
     def sample(self, generator: torch.Generator) -> SCM:
         """
@@ -83,15 +84,14 @@ class SCMBuilder:
         """Create noise distributions for exogenous and endogenous variables."""
         root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
         non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
-        root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.root_std))
-        non_root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.non_root_std))
+        root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.mean_root_std))
+        non_root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.mean_non_root_std))
         
         noise = {}
         for v in root_nodes:
-            std = root_std_gen.sample(generator)
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=std))
+            self.root_std[v] = root_std_gen.sample(generator)
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=self.root_std[v]))
         for v in non_root_nodes:
-            std = non_root_std_gen.sample(generator) 
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=std))
-
+            self.non_root_std[v] = non_root_std_gen.sample(generator)
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=self.non_root_std[v]))
         return noise
