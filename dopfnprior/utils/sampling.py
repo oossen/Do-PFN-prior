@@ -58,6 +58,7 @@ class TorchDistributionSampler(DistributionSampler):
     
     def __init__(self, distribution: dist.Distribution):
         self.distribution = distribution
+        self.distribution._validate_args = False # otherwise logprob of out-of-bounds values raises error
         
     def log_prob(self, value: torch.Tensor) -> float:
         log_probs = self.distribution.log_prob(torch.tensor([value]))
