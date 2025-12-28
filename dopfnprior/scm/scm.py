@@ -33,6 +33,7 @@ class SCM:
         dag: nx.DiGraph,
         mechanisms: Mapping[Any, nn.Module],
         noise: Mapping,
+        generator: torch.Generator,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ) -> None:
@@ -42,13 +43,18 @@ class SCM:
         self.device = torch.device(device)
         self.dtype = dtype
 
-        # --- Topology & parents
+        # Topology & parents
         self._topo: List = list(nx.topological_sort(dag))
         self._parents: Dict[Any, List] = {v: list(self.dag.predecessors(v)) for v in self._topo}
         self._is_root: Dict[Any, bool] = {v: (len(self._parents[v]) == 0) for v in self._topo}
 
-        # --- Fixed noise buffers
+        # Fixed noise buffers
         self._sampled_noise: Dict[Any, Tensor] = {}
+        
+        # Fit normalization
+        n_noise_fitting_samples = 100
+        self.sample_noise((n_noise_fitting_samples,), generator=generator)
+        self.propagate((n_noise_fitting_samples,))
     
     @torch.no_grad()
     def sample_noise(self,

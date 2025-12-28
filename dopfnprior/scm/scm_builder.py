@@ -71,12 +71,7 @@ class SCMBuilder:
             self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
-        scm = SCM(self.graph, self.mechanisms, self.noise)
-        
-        # Step 4: Fit normalization
-        n_noise_fitting_samples = 100
-        scm.sample_noise((n_noise_fitting_samples,), generator=generator)
-        scm.propagate((n_noise_fitting_samples,))
+        scm = SCM(self.graph, self.mechanisms, self.noise, generator)
         
         return scm
     
