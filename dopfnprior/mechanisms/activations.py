@@ -77,7 +77,7 @@ class RandomActivation(nn.Module):
             y = torch.clamp(y, self.clamp[0], self.clamp[1])
         return y
 
-    def _sample(self) -> nn.Module:
+    def _sample(self):
         # Get the the list of activations
         activations = get_activations(scale=True)
             
