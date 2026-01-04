@@ -6,7 +6,6 @@ from torch import Tensor
 import torch.nn as nn
 import networkx as nx
 from scipy.integrate import quad
-from scipy.optimize import minimize_scalar
 
 
 
@@ -16,8 +15,8 @@ class SCM:
 
     Workflow
     --------
-    1) scm.sample(B)                        # samples & fixes noise
-    2) xs = scm.propagate(B)                # uses the fixed noises
+    1) scm.sample(B)                       # samples & fixes noise
+    2) xs = scm.propagate()                # uses the fixed noises
 
     Parameters
     ----------
@@ -54,7 +53,7 @@ class SCM:
         # Fit normalization
         n_noise_fitting_samples = 100
         self.sample_noise((n_noise_fitting_samples,), generator=generator)
-        self.propagate((n_noise_fitting_samples,))
+        self.propagate()
     
     @torch.no_grad()
     def sample_noise(self,
@@ -63,10 +62,6 @@ class SCM:
                      generator: Optional[torch.Generator] = None,
                      nodes: Optional[List] = None
                      ) -> Dict[Any, Tensor]:
-        """
-        Sample & fix noise (eps) for all nodes.
-        If `nodes` is provided, resample only those nodes.
-        """
         target_nodes = nodes if nodes is not None else self._topo
         views: Dict[Any, Tensor] = {}
         for v in target_nodes:
@@ -80,7 +75,7 @@ class SCM:
         return views
 
     @torch.no_grad()
-    def propagate(self, sample_shape: Tuple[int, ...]) -> Dict[Any, Tensor]:
+    def propagate(self) -> Dict[Any, Tensor]:
         xs: Dict[Any, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
@@ -95,28 +90,48 @@ class SCM:
         return xs
     
     @torch.no_grad()
-    def log_likelihood(self, values: Dict[Any, Tensor], y_var: str) -> float:
-        """Compute the log-likelihood of the provided value of `y_var` conditioned on all other variables."""          
-        shape = values[list(values.keys())[0]].shape
-        total_log_likelihood = 0.0
+    def log_likelihood(self, values: Dict[Any, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
+        """
+        Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
+        The output is of the same shape as `y_values`.
         
-        for idx in np.ndindex(shape):
+        Parameters
+        ----------
+        values : Dict[Any, Tensor]
+            Contains observed values for all variables except `y_var`.
+            If `y_var` is included, its values are ignored.
+        y_values : Tensor
+            The values of the target variable `y_var` for which to compute the log-likelihood.
+            May have a different shape than the other variables.
+        y_var : str
+            The name of the target variable.
+            
+        Returns
+        -------
+        log_likelihood : Tensor
+            The log-likelihood of the `y_values` given the other variables in `values`.
+            If `values` contains several samples for each variable, the product of the corresponding
+            log-likelihoods is returned for each entry of `y_values`.
+        """          
+        shape_values = values[list(values.keys())[0]].shape
+        shape_y = y_values.shape
+        total_log_likelihood = torch.zeros(shape_y, device=self.device, dtype=self.dtype)
+        eps = 1e-8  # to avoid log(0)
+        
+        for idx in np.ndindex(shape_values):
             values_i = {v: values[v][idx] for v in values}
-            joint_log_likelihood = self.total_log_probability(values_i)
             
             def integrand(y):
                 values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
                 log_prob = self.total_log_probability(values_i)
                 return math.exp(log_prob)
-            
-            # find maximum and integrate around it
-            res = minimize_scalar(lambda y: -integrand(y))
-            maximum: float = cast(float, res.x)
-            a, b = maximum - 10.0, maximum + 10.0
-            marginal = quad(integrand, a, b, points=[maximum])[0]
-            eps = 1e-12  # to avoid log(0)
+            marginal = quad(integrand, -20, 20)[0]
             log_marginal = math.log(marginal + eps)
-            total_log_likelihood += joint_log_likelihood - log_marginal
+            
+            for idx_y in np.ndindex(shape_y):
+                values_i[y_var] = y_values[idx_y]
+                joint_log_likelihood = self.total_log_probability(values_i)
+                total_log_likelihood[idx_y] += joint_log_likelihood - log_marginal
 
         return total_log_likelihood
     
