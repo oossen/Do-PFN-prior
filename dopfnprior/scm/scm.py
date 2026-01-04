@@ -90,7 +90,29 @@ class SCM:
         return xs
     
     @torch.no_grad()
-    def log_likelihood(self, values: Dict[Any, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
+    def log_likelihood(self, values: Dict[Any, Tensor], y_var: str = 'y') -> float:
+        """
+        Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
+        """
+        shape_values = values[list(values.keys())[0]].shape
+        total_log_likelihood = 0.0
+        eps = 1e-8  # to avoid log(0)
+        for idx in np.ndindex(shape_values):
+            values_i = {v: values[v][idx] for v in values}
+            joint_log_likelihood = self.total_log_probability(values_i)
+            
+            def integrand(y):
+                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
+                log_prob = self.total_log_probability(values_i)
+                return math.exp(log_prob)
+            marginal = quad(integrand, -20, 20)[0]
+            log_marginal = math.log(marginal + eps)
+            
+            total_log_likelihood += joint_log_likelihood - log_marginal
+        return total_log_likelihood
+    
+    @torch.no_grad()
+    def log_likelihood_batch(self, values: Dict[Any, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
         """
         Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
         The output is of the same shape as `y_values`.
