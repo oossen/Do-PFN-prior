@@ -6,6 +6,7 @@ from torch import Tensor
 import torch.nn as nn
 import networkx as nx
 from scipy.integrate import quad
+from scipy.optimize import minimize_scalar
 
 
 
@@ -105,7 +106,13 @@ class SCM:
                 values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
                 log_prob = self.total_log_probability(values_i)
                 return math.exp(log_prob)
-            marginal = quad(integrand, -20, 20)[0]
+            def neg_log_prob(y):
+                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
+                log_prob = self.total_log_probability(values_i)
+                return -log_prob
+            res = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded')
+            maximum: float = cast(float, res.x)
+            marginal = quad(integrand, -20, 20, points=[maximum])[0]
             log_marginal = math.log(marginal + eps)
             
             total_log_likelihood += joint_log_likelihood - log_marginal
