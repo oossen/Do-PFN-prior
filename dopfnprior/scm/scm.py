@@ -1,13 +1,14 @@
 import math
-from typing import Any, Dict, Mapping, Optional, Tuple, List, cast
+from typing import Any, Dict, Mapping, Optional, Tuple, List
 import numpy as np
 import torch
 from torch import Tensor
 import torch.nn as nn
 import networkx as nx
 from scipy.integrate import quad
-from scipy.optimize import minimize_scalar, OptimizeResult
+from scipy.optimize import minimize_scalar
 
+EPS = 1e-8
 
 
 class SCM:
@@ -144,7 +145,6 @@ class SCM:
         shape_values = values[list(values.keys())[0]].shape
         shape_y = y_values.shape
         total_log_likelihood = torch.zeros(shape_y, device=self.device, dtype=self.dtype)
-        eps = 1e-8  # to avoid log(0)
         
         for idx in np.ndindex(shape_values):
             values_i = {v: values[v][idx] for v in values}
@@ -159,7 +159,7 @@ class SCM:
                 return -log_prob
             maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
             marginal = quad(integrand, -20, 20, points=[maximum])[0]
-            log_marginal = math.log(marginal + eps)
+            log_marginal = math.log(marginal + EPS)
             
             for idx_y in np.ndindex(shape_y):
                 values_i[y_var] = y_values[idx_y]
@@ -186,3 +186,27 @@ class SCM:
                 sampled_noise[v] = values[v] - x
             log_prob += self.noise[v].log_prob(sampled_noise[v])
         return log_prob
+    
+    @torch.no_grad()
+    def marginal(self, values: Dict[Any, Tensor]) -> float:
+        """
+        Compute the marginal probability of the provided values.
+        Currently assumes that exactly one variable is marginalized out.
+        """
+        expected_keys = self._topo
+        data = {"id": 1, "name": "Alice", "status": "active"}  # "email" is missing
+        missing = set(expected_keys) - set(data.keys())
+        assert len(missing) == 1, f"Expected exactly 1 missing key, but found {len(missing)}: {missing}"
+        y_var = missing.pop()
+        def integrand(y):
+            values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
+            log_prob = self.total_log_probability(values)
+            return math.exp(log_prob)
+        def neg_log_prob(y):
+            values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
+            log_prob = self.total_log_probability(values)
+            return -log_prob
+        maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
+        marginal = quad(integrand, -20, 20, points=[maximum])[0]
+        log_marginal = math.log(marginal + EPS)
+        return log_marginal
