@@ -193,9 +193,8 @@ class SCM:
         Compute the marginal probability of the provided values.
         Currently assumes that exactly one variable is marginalized out.
         """
-        expected_keys = self._topo
-        data = {"id": 1, "name": "Alice", "status": "active"}  # "email" is missing
-        missing = set(expected_keys) - set(data.keys())
+        expected_keys = self.dag.nodes()
+        missing = set(expected_keys) - set(values.keys())
         assert len(missing) == 1, f"Expected exactly 1 missing key, but found {len(missing)}: {missing}"
         y_var = missing.pop()
         def integrand(y):
