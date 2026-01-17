@@ -77,7 +77,7 @@ class ObservationalDataLoader(DataLoader):
         total_samples = num_train_samples + num_test_samples
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
-        data = scm.propagate()
+        data = scm.propagate(generator=self.generator)
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}

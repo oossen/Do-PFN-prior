@@ -7,6 +7,7 @@ import torch.nn as nn
 import networkx as nx
 from scipy.integrate import quad
 from scipy.optimize import minimize_scalar
+from itertools import combinations
 
 EPS = 1e-8
 
@@ -182,12 +183,17 @@ class SCM:
         for v in self._topo:
             if self._is_root[v]:
                 sampled_noise[v] = values[v]
+                log_prob += self.noise[v].log_prob(sampled_noise[v])
             else:
                 mech = self.mechanisms[v]
-                parents_feat = {v: values[p] for p in self._parents[v]}
-                x = mech(parents_feat, eps=None)
-                sampled_noise[v] = values[v] - x
-            log_prob += self.noise[v].log_prob(sampled_noise[v])
+                for r in range(len(self._parents[v]) + 1):
+                    for parents in combinations(self._parents[v], r):
+                        parents_feat = {v: values[p] for p in parents}
+                        x = mech(parents_feat, eps=None)
+                        sampled_noise[v] = values[v] - x
+                        log_prob += self.noise[v].log_prob(sampled_noise[v])
+                        log_prob += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents)
+                        log_prob += sum(math.log(1.0 - self.dag.edges[(p, v)].get("weight", 1.0)) for p in self._parents[v] if p not in parents)
         return log_prob
     
     @torch.no_grad()
