@@ -55,7 +55,7 @@ class SCM:
         # Fit normalization
         n_noise_fitting_samples = 100
         self.sample_noise((n_noise_fitting_samples,), generator=generator)
-        self.propagate()
+        self.propagate(generator=generator)
     
     @torch.no_grad()
     def sample_noise(self,
@@ -77,11 +77,14 @@ class SCM:
         return views
 
     @torch.no_grad()
-    def propagate(self) -> Dict[Any, Tensor]:
+    def propagate(self, generator: Optional[torch.Generator]) -> Dict[Any, Tensor]:
         xs: Dict[Any, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
-            parents_feat = {v: xs[p] for p in self._parents[v]}
+            parents_feat = {}
+            for p in self._parents[v]:
+                mask = torch.bernoulli(torch.full_like(xs[p], self.dag.edges[(p, v)].get("weight", 1.0)), generator=generator)
+                parents_feat[p] = xs[p] * mask
             eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype) if v in self._sampled_noise else None
 
             x = mech(parents_feat, eps=eps_v)
