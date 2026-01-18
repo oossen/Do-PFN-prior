@@ -86,7 +86,7 @@ class SCM:
             for p in self._parents[v]:
                 mask = torch.bernoulli(torch.full_like(xs[p], self.dag.edges[(p, v)].get("weight", 1.0)), generator=generator)
                 parents_feat[p] = xs[p] * mask
-            eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype) if v in self._sampled_noise else None
+            eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype)
 
             x = mech(parents_feat, eps=eps_v)
             xs[v] = x
@@ -180,6 +180,7 @@ class SCM:
         """
         log_prob = 0.0
         sampled_noise = {}
+        value_shape = list(values.values())[0].shape
         for v in self._topo:
             if self._is_root[v]:
                 sampled_noise[v] = values[v]
@@ -189,7 +190,7 @@ class SCM:
                 for r in range(len(self._parents[v]) + 1):
                     for parents in combinations(self._parents[v], r):
                         parents_feat = {v: values[p] for p in parents}
-                        x = mech(parents_feat, eps=None)
+                        x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
                         sampled_noise[v] = values[v] - x
                         log_prob += self.noise[v].log_prob(sampled_noise[v])
                         log_prob += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents)

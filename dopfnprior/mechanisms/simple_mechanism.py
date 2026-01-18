@@ -26,10 +26,7 @@ class SimpleMechanism(nn.Module):
         self.weights = nn.ParameterDict(weights_map)
         self.activation = RandomActivation(generator=self.generator)
 
-    def forward(self, parent_values: Dict[Any, Tensor], eps: Optional[Tensor]) -> Tensor:
-        if eps is None:
-            eps = torch.zeros_like(parent_values[list(parent_values.keys())[0]])
-        
+    def forward(self, parent_values: Dict[Any, Tensor], eps: Tensor) -> Tensor:  
         if len(parent_values) == 0:
             return eps
         
