@@ -193,8 +193,9 @@ class SCM:
                         x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
                         sampled_noise[v] = values[v] - x
                         log_prob += self.noise[v].log_prob(sampled_noise[v])
-                        log_prob += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents)
-                        log_prob += sum(math.log(1.0 - self.dag.edges[(p, v)].get("weight", 1.0)) for p in self._parents[v] if p not in parents)
+                        parent_selection_prob = sum(self.dag.edges[(p, v)].get("weight", 1.0) for p in parents) \
+                            + sum(1.0 - self.dag.edges[(p, v)].get("weight", 1.0) for p in self._parents[v] if p not in parents)
+                        log_prob += math.log(parent_selection_prob + EPS)
         return log_prob
     
     @torch.no_grad()
