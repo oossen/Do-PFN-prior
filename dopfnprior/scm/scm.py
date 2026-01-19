@@ -158,13 +158,7 @@ class SCM:
                 values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
                 log_prob = self.total_log_probability(values_i)
                 return math.exp(log_prob)
-            def neg_log_prob(y):
-                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-                log_prob = self.total_log_probability(values_i)
-                return -log_prob
-            maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
-            marginal = quad(integrand, -20, 20, points=[maximum])[0]
-            log_marginal = math.log(marginal + EPS)
+            log_marginal = log_quad_exp(integrand, -20, 20)
             
             for idx_y in np.ndindex(shape_y):
                 values_i[y_var] = y_values[idx_y]
@@ -213,11 +207,18 @@ class SCM:
             values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
             log_prob = self.total_log_probability(values)
             return math.exp(log_prob)
-        def neg_log_prob(y):
-            values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-            log_prob = self.total_log_probability(values)
-            return -log_prob
-        maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
-        marginal = quad(integrand, -20, 20, points=[maximum])[0]
-        log_marginal = math.log(marginal + EPS)
+        log_marginal = log_quad_exp(integrand, -20, 20)
         return log_marginal
+    
+
+def log_quad_exp(f, a, b):
+    """
+    Computes log(integral(exp(f(x)) dx)) numerically stably.
+    """
+    res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
+    max_y, max_val  = res.x, -res.fun # type: ignore
+    
+    integrand = lambda y: math.exp(f(y) - max_val)
+    integral, _ = quad(integrand, a, b, points=[max_y])
+    
+    return max_val + math.log(integral)
