@@ -157,7 +157,7 @@ class SCM:
             def integrand(y):
                 values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
                 log_prob = self.total_log_probability(values_i)
-                return math.exp(log_prob)
+                return log_prob
             log_marginal = log_quad_exp(integrand, -20, 20)
             
             for idx_y in np.ndindex(shape_y):
@@ -206,7 +206,7 @@ class SCM:
         def integrand(y):
             values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
             log_prob = self.total_log_probability(values)
-            return math.exp(log_prob)
+            return log_prob
         log_marginal = log_quad_exp(integrand, -20, 20)
         return log_marginal
     
