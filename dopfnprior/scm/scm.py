@@ -53,10 +53,12 @@ class SCM:
         # Fixed noise buffers
         self._sampled_noise: Dict[Any, Tensor] = {}
         
+        """
         # Fit normalization
         n_noise_fitting_samples = 100
         self.sample_noise((n_noise_fitting_samples,), generator=generator)
         self.propagate(generator=generator)
+        """
     
     @torch.no_grad()
     def sample_noise(self,
