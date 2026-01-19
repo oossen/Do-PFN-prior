@@ -181,7 +181,7 @@ class SCM:
             prob_contribution_logs = []
             for r in range(len(self._parents[v]) + 1):
                 for parents in combinations(self._parents[v], r):
-                    parents_feat = {v: values[p] for p in parents}
+                    parents_feat = {p: values[p] for p in parents}
                     x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
                     sampled_noise[v] = values[v] - x
                     prob_contribution_log = 0.0
