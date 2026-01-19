@@ -194,7 +194,7 @@ class SCM:
                     prob_contribution_log += self.noise[v].log_prob(sampled_noise[v])
                     prob_contribution_log += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents) \
                         + sum(math.log(1.0 - self.dag.edges[(p, v)].get("weight", 1.0)) for p in self._parents[v] if p not in parents)
-                    prob_contribution_logs.append(prob_contribution_log)
+                    prob_contribution_logs.append(torch.tensor(prob_contribution_log, device=self.device, dtype=self.dtype))
             all_logs = torch.stack(prob_contribution_logs)
             log_prob += torch.logsumexp(all_logs, dim=0).item()
         return log_prob
