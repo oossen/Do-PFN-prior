@@ -104,7 +104,6 @@ class SCM:
         """
         shape_values = values[list(values.keys())[0]].shape
         total_log_likelihood = 0.0
-        eps = 1e-8  # to avoid log(0)
         for idx in np.ndindex(shape_values):
             values_i = {v: values[v][idx] for v in values}
             joint_log_likelihood = self.total_log_probability(values_i)
@@ -119,7 +118,7 @@ class SCM:
                 return -log_prob
             maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
             marginal = quad(integrand, -20, 20, points=[maximum])[0]
-            log_marginal = math.log(marginal + eps)
+            log_marginal = math.log(marginal + EPS)
             
             total_log_likelihood += joint_log_likelihood - log_marginal
         return total_log_likelihood
@@ -185,7 +184,7 @@ class SCM:
         value_shape = list(values.values())[0].shape
         for v in self._topo:
             mech = self.mechanisms[v]
-            prob_contributions = []
+            prob_contribution_logs = []
             for r in range(len(self._parents[v]) + 1):
                 for parents in combinations(self._parents[v], r):
                     parents_feat = {v: values[p] for p in parents}
@@ -195,9 +194,9 @@ class SCM:
                     prob_contribution_log += self.noise[v].log_prob(sampled_noise[v])
                     prob_contribution_log += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents) \
                         + sum(math.log(1.0 - self.dag.edges[(p, v)].get("weight", 1.0)) for p in self._parents[v] if p not in parents)
-                    prob_contributions.append(math.exp(prob_contribution_log))
-            total_prob_contribution = sum(prob_contributions) + EPS
-            log_prob += math.log(total_prob_contribution)
+                    prob_contribution_logs.append(prob_contribution_log)
+            all_logs = torch.stack(prob_contribution_logs)
+            log_prob += torch.logsumexp(all_logs, dim=0).item()
         return log_prob
     
     @torch.no_grad()
