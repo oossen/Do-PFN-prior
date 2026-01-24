@@ -141,7 +141,7 @@ class SCM:
         return log_prob
     
     @torch.no_grad()
-    def marginal(self, values: Dict[Any, Tensor]) -> float:
+    def marginal(self, values: Dict[Any, float], steps=100, low=-10.0, high=10.0) -> Tensor:
         """
         Compute the marginal probability of the provided values.
         Currently assumes that exactly one variable is marginalized out.
@@ -149,13 +149,30 @@ class SCM:
         expected_keys = self.dag.nodes()
         missing = set(expected_keys) - set(values.keys())
         assert len(missing) == 1, f"Expected exactly 1 missing key, but found {len(missing)}: {missing}"
+        
+        y_explore = torch.linspace(low, high, steps, device=self.device, dtype=self.dtype)
         y_var = missing.pop()
-        def integrand(y):
-            values[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-            log_prob = self.total_log_probability(values)
-            return log_prob
-        log_marginal = log_quad_exp(integrand, -20, 20)
-        return log_marginal
+        values_tensor = {y_var: y_explore}
+        for k, v in values.items():
+            if k != y_var:
+                values_tensor[k] = torch.full(y_explore.shape, v, device=self.device, dtype=self.dtype)
+        
+        p_explore = torch.exp(self.total_log_probability(values_tensor))
+        eps = 0.01 * p_explore.max()
+        mask = p_explore > eps
+        indices = torch.where(mask)[0]
+        buffer = 1
+        start_idx = max(0, indices[0] - buffer)
+        end_idx = min(len(y_explore) - 1, indices[-1] + buffer)
+        a = y_explore[start_idx]
+        b = y_explore[end_idx]
+
+        y = torch.linspace(a, b, steps)
+        values_tensor[y_var] = y
+        probs = torch.exp(self.total_log_probability(values_tensor))
+        marginal = torch.trapezoid(probs, y)
+        
+        return torch.log(marginal)
     
 
 def log_quad_exp(f, a, b) -> float:
