@@ -211,14 +211,19 @@ class SCM:
         return log_marginal
     
 
-def log_quad_exp(f, a, b):
+def log_quad_exp(f, a, b, fast=True) -> float:
     """
     Computes log(integral(exp(f(x)) dx)) numerically stably.
     """
-    res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
-    max_y, max_val  = res.x, -res.fun # type: ignore
+    points = []
+    if not fast:
+        res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
+        max_y, max_val  = res.x, -res.fun # type: ignore
+        points.append(max_y)
+    else:
+        max_val = 0.0
     
     integrand = lambda y: math.exp(f(y) - max_val)
-    integral, _ = quad(integrand, a, b, points=[max_y], epsabs=1e-2, epsrel=1e-2)
+    integral, _ = quad(integrand, a, b, points=points, epsabs=1e-2, epsrel=1e-2)
     
     return max_val + math.log(integral)
