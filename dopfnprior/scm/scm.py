@@ -219,6 +219,6 @@ def log_quad_exp(f, a, b):
     max_y, max_val  = res.x, -res.fun # type: ignore
     
     integrand = lambda y: math.exp(f(y) - max_val)
-    integral, _ = quad(integrand, a, b, points=[max_y])
+    integral, _ = quad(integrand, a, b, points=[max_y], epsabs=1e-2, epsrel=1e-2)
     
     return max_val + math.log(integral)
