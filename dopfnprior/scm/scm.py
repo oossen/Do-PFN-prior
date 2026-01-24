@@ -141,7 +141,7 @@ class SCM:
         return log_prob
     
     @torch.no_grad()
-    def marginal(self, values: Dict[Any, float], steps=100, low=-10.0, high=10.0) -> Tensor:
+    def marginal(self, values: Dict[Any, float], steps=100, low=-10.0, high=10.0) -> float:
         """
         Compute the marginal probability of the provided values.
         Currently assumes that exactly one variable is marginalized out.
@@ -172,7 +172,7 @@ class SCM:
         probs = torch.exp(self.total_log_probability(values_tensor))
         marginal = torch.trapezoid(probs, y)
         
-        return torch.log(marginal)
+        return torch.log(marginal).item()
     
 
 def log_quad_exp(f, a, b) -> float:
