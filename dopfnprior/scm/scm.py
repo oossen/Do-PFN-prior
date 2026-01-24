@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import networkx as nx
-from scipy.integrate import quad
+from scipy.integrate import quad, trapezoid
 from scipy.optimize import minimize_scalar
 from itertools import combinations
 
@@ -35,7 +35,6 @@ class SCM:
         dag: nx.DiGraph,
         mechanisms: Mapping[Any, nn.Module],
         noise: Mapping,
-        generator: torch.Generator,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
     ) -> None:
@@ -52,13 +51,6 @@ class SCM:
 
         # Fixed noise buffers
         self._sampled_noise: Dict[Any, Tensor] = {}
-        
-        """
-        # Fit normalization
-        n_noise_fitting_samples = 100
-        self.sample_noise((n_noise_fitting_samples,), generator=generator)
-        self.propagate(generator=generator)
-        """
     
     @torch.no_grad()
     def sample_noise(self,
@@ -80,14 +72,13 @@ class SCM:
         return views
 
     @torch.no_grad()
-    def propagate(self, generator: Optional[torch.Generator]) -> Dict[Any, Tensor]:
+    def propagate(self) -> Dict[Any, Tensor]:
         xs: Dict[Any, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
             parents_feat = {}
             for p in self._parents[v]:
-                mask = torch.bernoulli(torch.full_like(xs[p], self.dag.edges[(p, v)].get("weight", 1.0)), generator=generator)
-                parents_feat[p] = xs[p] * mask
+                parents_feat[p] = xs[p]
             eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype)
 
             x = mech(parents_feat, eps=eps_v)
@@ -98,45 +89,18 @@ class SCM:
         return xs
     
     @torch.no_grad()
-    def log_likelihood(self, values: Dict[Any, Tensor], y_var: str = 'y') -> float:
-        """
-        Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
-        """
-        shape_values = values[list(values.keys())[0]].shape
-        total_log_likelihood = 0.0
-        for idx in np.ndindex(shape_values):
-            values_i = {v: values[v][idx] for v in values}
-            joint_log_likelihood = self.total_log_probability(values_i)
-            
-            def integrand(y):
-                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-                log_prob = self.total_log_probability(values_i)
-                return math.exp(log_prob)
-            def neg_log_prob(y):
-                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-                log_prob = self.total_log_probability(values_i)
-                return -log_prob
-            maximum = minimize_scalar(neg_log_prob, bounds=(-20, 20), method='bounded').x # type: ignore
-            marginal = quad(integrand, -20, 20, points=[maximum])[0]
-            log_marginal = math.log(marginal + EPS)
-            
-            total_log_likelihood += joint_log_likelihood - log_marginal
-        return total_log_likelihood
-    
-    @torch.no_grad()
-    def log_likelihood_batch(self, values: Dict[Any, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
+    def log_likelihood_batch(self, values: Dict[Any, float], y_values: Tensor, y_var: str = 'y') -> Tensor:
         """
         Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
         The output is of the same shape as `y_values`.
         
         Parameters
         ----------
-        values : Dict[Any, Tensor]
-            Contains observed values for all variables except `y_var`.
+        values : Dict[Any, float]
+            Contains an observed value for each feature.
             If `y_var` is included, its values are ignored.
         y_values : Tensor
             The values of the target variable `y_var` for which to compute the log-likelihood.
-            May have a different shape than the other variables.
         y_var : str
             The name of the target variable.
             
@@ -144,53 +108,36 @@ class SCM:
         -------
         log_likelihood : Tensor
             The log-likelihood of the `y_values` given the other variables in `values`.
-            If `values` contains several samples for each variable, the product of the corresponding
-            log-likelihoods is returned for each entry of `y_values`.
+            Has the same shape as `y_values`.
         """          
-        shape_values = values[list(values.keys())[0]].shape
         shape_y = y_values.shape
-        total_log_likelihood = torch.zeros(shape_y, device=self.device, dtype=self.dtype)
-        
-        for idx in np.ndindex(shape_values):
-            values_i = {v: values[v][idx] for v in values}
-            
-            def integrand(y):
-                values_i[y_var] = torch.tensor(y, device=self.device, dtype=self.dtype)
-                log_prob = self.total_log_probability(values_i)
-                return log_prob
-            log_marginal = log_quad_exp(integrand, -20, 20)
-            
-            for idx_y in np.ndindex(shape_y):
-                values_i[y_var] = y_values[idx_y]
-                joint_log_likelihood = self.total_log_probability(values_i)
-                total_log_likelihood[idx_y] += joint_log_likelihood - log_marginal
+        values_tensor = {y_var: y_values}
+        for k, v in values.items():
+            if k != y_var:
+                values_tensor[k] = torch.full(shape_y, v, device=self.device, dtype=self.dtype)
+                
+        log_prob = self.total_log_probability(values_tensor)
+        prob = torch.exp(log_prob)
+        marginal = torch.trapezoid(prob, y_values)
+        log_marginal = torch.log(marginal + EPS)
 
-        return total_log_likelihood
+        return log_prob - log_marginal
     
     @torch.no_grad()
-    def total_log_probability(self, values: Dict[Any, Tensor]) -> float:
+    def total_log_probability(self, values: Dict[Any, Tensor]) -> Tensor:
         """
-        Compute the probability of the provided values under the SCM,
-        using the mechanisms saved in `self.mechanisms`.
+        Compute the probabilities of the provided values under the SCM.
+        The returned tensor has the same shape as the input values.
         """
-        log_prob = 0.0
         sampled_noise = {}
         value_shape = list(values.values())[0].shape
+        log_prob = torch.zeros(value_shape, device=self.device, dtype=self.dtype)
         for v in self._topo:
             mech = self.mechanisms[v]
-            prob_contribution_logs = []
-            for r in range(len(self._parents[v]) + 1):
-                for parents in combinations(self._parents[v], r):
-                    parents_feat = {p: values[p] for p in parents}
-                    x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
-                    sampled_noise[v] = values[v] - x
-                    prob_contribution_log = 0.0
-                    prob_contribution_log += self.noise[v].log_prob(sampled_noise[v])
-                    prob_contribution_log += sum(math.log(self.dag.edges[(p, v)].get("weight", 1.0)) for p in parents) \
-                        + sum(math.log(1.0 - self.dag.edges[(p, v)].get("weight", 1.0)) for p in self._parents[v] if p not in parents)
-                    prob_contribution_logs.append(torch.tensor(prob_contribution_log, device=self.device, dtype=self.dtype))
-            all_logs = torch.stack(prob_contribution_logs)
-            log_prob += torch.logsumexp(all_logs, dim=0).item()
+            parents_feat = {p: values[p] for p in self._parents[v]}
+            x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
+            sampled_noise[v] = values[v] - x
+            log_prob += self.noise[v].log_prob(sampled_noise[v])
         return log_prob
     
     @torch.no_grad()
@@ -211,17 +158,14 @@ class SCM:
         return log_marginal
     
 
-def log_quad_exp(f, a, b, fast=True) -> float:
+def log_quad_exp(f, a, b) -> float:
     """
     Computes log(integral(exp(f(x)) dx)) numerically stably.
     """
     points = []
-    if not fast:
-        res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
-        max_y, max_val  = res.x, -res.fun # type: ignore
-        points.append(max_y)
-    else:
-        max_val = 0.0
+    res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
+    max_y, max_val  = res.x, -res.fun # type: ignore
+    points.append(max_y)
     
     integrand = lambda y: math.exp(f(y) - max_val)
     integral, _ = quad(integrand, a, b, points=points, epsabs=1e-2, epsrel=1e-2)

@@ -15,10 +15,9 @@ class DistributionSampler(ABC):
         pass
     
     @abstractmethod
-    def log_prob(self, value: torch.Tensor) -> float:
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         """
-        Compute log probability of the given value(s).
-        The output is float valued even if `value` is not a singleton. 
+        Compute the log probabilities of the given values.
         """
         pass
     
@@ -43,11 +42,10 @@ class FixedSampler(DistributionSampler):
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         return torch.full((n,), self.value)
     
-    def log_prob(self, value: torch.Tensor) -> float:
-        if torch.all(value == self.value):
-            return 0.0  # log(1)
-        else:
-            return float('-inf')  # log(0)
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        equal = (value == self.value)
+        log_probs = torch.where(equal, torch.zeros_like(value, dtype=torch.float32), torch.full_like(value, float('-inf'), dtype=torch.float32))
+        return log_probs
     
 
 class TorchDistributionSampler(DistributionSampler):
@@ -60,9 +58,9 @@ class TorchDistributionSampler(DistributionSampler):
         self.distribution = distribution
         self.distribution._validate_args = False # otherwise logprob of out-of-bounds values raises error
         
-    def log_prob(self, value: torch.Tensor) -> float:
-        log_probs = self.distribution.log_prob(torch.tensor([value]))
-        return log_probs.sum().item()
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        log_probs = self.distribution.log_prob(value)
+        return log_probs
     
     @torch.no_grad()
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
@@ -89,12 +87,12 @@ class DiscreteUniformSampler(DistributionSampler):
         if high < low:
             raise ValueError(f"high ({high}) must be >= low ({low})")
         
-    def log_prob(self, value: torch.Tensor) -> float:
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         in_range = (value >= self.low) & (value <= self.high)
         num_values = self.high - self.low + 1
         log_prob_value = math.log(1.0 / num_values)
         log_probs = torch.where(in_range, torch.full_like(value, log_prob_value, dtype=torch.float32), torch.full_like(value, float('-inf'), dtype=torch.float32))
-        return log_probs.sum().item()
+        return log_probs
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         if generator is not None:
@@ -121,10 +119,10 @@ class LogarithmicSampler(DistributionSampler):
         self.log_high = math.log(high)
         self.uniform_sampler = TorchDistributionSampler(dist.Uniform(low=self.log_low, high=self.log_high))
         
-    def log_prob(self, value: torch.Tensor) -> float:
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         # density of log-uniform distribution is 1/(x * (log(b) - log(a))) for x in [a, b]
         log_probs = -torch.log(value) - math.log(self.log_high - self.log_low)
-        return log_probs.sum().item()
+        return log_probs
     
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         log_sample = self.uniform_sampler.sample_n(n, generator)
