@@ -157,9 +157,9 @@ class SCM:
             if k != y_var:
                 values_tensor[k] = torch.full(y_explore.shape, v, device=self.device, dtype=self.dtype)
         
-        p_explore = torch.exp(self.total_log_probability(values_tensor))
-        eps = 0.01 * p_explore.max()
-        mask = p_explore > eps
+        log_p_explore = self.total_log_probability(values_tensor)
+        eps = log_p_explore.max() - 100
+        mask = log_p_explore > eps
         indices = torch.where(mask)[0]
         buffer = 1
         start_idx = max(0, indices[0] - buffer)
