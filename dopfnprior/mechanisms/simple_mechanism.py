@@ -34,4 +34,4 @@ class SimpleMechanism(nn.Module):
             if v in parent_values:
                 weighted_inputs.append(parent_values[v] * weight)
         combined = torch.sum(torch.stack(weighted_inputs), dim=0)
-        return torch.asinh(combined) + eps
+        return torch.tanh(3 * combined) + eps
