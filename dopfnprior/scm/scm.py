@@ -105,7 +105,7 @@ class SCM:
         log_prob = self.total_log_probability(values_tensor)
         prob = torch.exp(log_prob)
         marginal = torch.trapezoid(prob, y_values, dim=-1)
-        log_marginal = torch.log(marginal)
+        log_marginal = torch.log(marginal).unsqueeze(-1)
 
         return log_prob - log_marginal
     
