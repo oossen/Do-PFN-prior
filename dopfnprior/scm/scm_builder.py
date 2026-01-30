@@ -76,8 +76,8 @@ class SCMBuilder:
     
     def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Dict[str, DistributionSampler]:
         """Create noise distributions for exogenous and endogenous variables."""
-        root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
-        non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
+        root_nodes = [v for v in self.graph.nodes() if self.graph.in_degree(v) == 0]
+        non_root_nodes = [v for v in self.graph.nodes() if self.graph.in_degree(v) > 0]
         
         noise = {}
         for v in root_nodes:
