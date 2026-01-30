@@ -39,11 +39,11 @@ class ObservationalDataLoader(DataLoader):
         
         self.prior_config = prior_config
         self.graph_config = prior_config["graph_config"]
-        self.scm_config = prior_config["scm_config"]
+        self.noise_config = prior_config["noise_config"]
         self.dataset_config = prior_config["dataset_config"]
         
         self.graph_samplers = build_samplers(self.graph_config, "graph")
-        self.scm_samplers = build_samplers(self.scm_config, "scm")
+        self.noise_samplers = build_samplers(self.noise_config, "noise")
         self.dataset_samplers = build_samplers(self.dataset_config, "dataset")
         
     def __len__(self) -> int:
@@ -64,8 +64,9 @@ class ObservationalDataLoader(DataLoader):
         graph = graph_builder.sample(self.generator)
             
         # sample SCM
-        scm_params = sample_parameters(self.scm_samplers, self.generator)
-        scm_builder = SCMBuilder(graph, **scm_params)
+        activations = self.prior_config["activations"]
+        root_std_dist, non_root_std_dist = self.noise_samplers["root_std_dist"], self.noise_samplers["non_root_std_dist"]
+        scm_builder = SCMBuilder(graph, activations=activations, root_std_dist=root_std_dist, non_root_std_dist=non_root_std_dist)
         scm = scm_builder.sample(self.generator)
             
         # sample dataset parameters
@@ -77,7 +78,7 @@ class ObservationalDataLoader(DataLoader):
         total_samples = num_train_samples + num_test_samples
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
-        data = scm.propagate(generator=self.generator)
+        data = scm.propagate()
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}

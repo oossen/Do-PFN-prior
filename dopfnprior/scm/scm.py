@@ -1,15 +1,10 @@
-import math
-from typing import Any, Dict, Mapping, Optional, Tuple, List
-import numpy as np
+from typing import Dict, Optional, Tuple, List
 import torch
 from torch import Tensor
 import torch.nn as nn
 import networkx as nx
-from scipy.integrate import quad, trapezoid
-from scipy.optimize import minimize_scalar
-from itertools import combinations
 
-EPS = 1e-8
+from dopfnprior.utils.sampling import DistributionSampler
 
 
 class SCM:
@@ -18,62 +13,49 @@ class SCM:
 
     Workflow
     --------
-    1) scm.sample(B)                       # samples & fixes noise
+    1) scm.sample_noise(B)                 # samples and fixes noise (B is any shape)
     2) xs = scm.propagate()                # uses the fixed noises
 
     Parameters
     ----------
     dag : CausalDAG
-    mechanisms : Mapping[str, BaseMechanism]
-    noise : Mapping[int, Distribution]
-    device : torch.device | str
+    mechanisms : Dict[str, nn.Module]
+    noise : Dict[str, DistributionSampler]
+    device : torch.device
     dtype : torch.dtype
     """
 
     def __init__(
         self,
         dag: nx.DiGraph,
-        mechanisms: Mapping[Any, nn.Module],
-        noise: Mapping,
-        device: torch.device | str = "cpu",
+        mechanisms: Dict[str, nn.Module],
+        noise: Dict[str, DistributionSampler],
+        device: torch.device = torch.device("cpu"),
         dtype: torch.dtype = torch.float32,
     ) -> None:
         self.dag = dag
         self.mechanisms = mechanisms
         self.noise = noise
-        self.device = torch.device(device)
+        self.device = device
         self.dtype = dtype
 
-        # Topology & parents
-        self._topo: List = list(nx.topological_sort(dag))
-        self._parents: Dict[Any, List] = {v: list(self.dag.predecessors(v)) for v in self._topo}
-        self._is_root: Dict[Any, bool] = {v: (len(self._parents[v]) == 0) for v in self._topo}
+        # Topology and parents
+        self._topo: List[str] = list(nx.topological_sort(dag))
+        self._parents: Dict[str, List[str]] = {v: list(self.dag.predecessors(v)) for v in self._topo}
 
         # Fixed noise buffers
-        self._sampled_noise: Dict[Any, Tensor] = {}
+        self._sampled_noise: Dict[str, Tensor] = {}
     
     @torch.no_grad()
-    def sample_noise(self,
-                     sample_shape: Tuple[int, ...],
-                     *,
-                     generator: Optional[torch.Generator] = None,
-                     nodes: Optional[List] = None
-                     ) -> Dict[Any, Tensor]:
-        target_nodes = nodes if nodes is not None else self._topo
-        views: Dict[Any, Tensor] = {}
-        for v in target_nodes:
-            dist_v = self.noise.get(v, None)
+    def sample_noise(self, sample_shape: Tuple[int, ...], generator: Optional[torch.Generator] = None) -> None:
+        for v in self._topo:
+            dist_v = self.noise[v]
             e_v = dist_v.sample_shape(sample_shape, generator=generator)
-            if not isinstance(e_v, Tensor):
-                e_v = torch.as_tensor(e_v)
-            views[v] = e_v
-
-        self._sampled_noise = views
-        return views
+            self._sampled_noise[v] = e_v
 
     @torch.no_grad()
-    def propagate(self) -> Dict[Any, Tensor]:
-        xs: Dict[Any, Tensor] = {}
+    def propagate(self) -> Dict[str, Tensor]:
+        xs: Dict[str, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
             parents_feat = {}
@@ -89,14 +71,14 @@ class SCM:
         return xs
     
     @torch.no_grad()
-    def log_likelihood_batch(self, values: Dict[Any, float], y_values: Tensor, y_var: str = 'y') -> Tensor:
+    def log_likelihood_batch(self, values: Dict[str, float], y_values: Tensor, y_var: str = 'y') -> Tensor:
         """
         Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
         The output is of the same shape as `y_values`.
         
         Parameters
         ----------
-        values : Dict[Any, float]
+        values : Dict[str, float]
             Contains an observed value for each feature.
             If `y_var` is included, its values are ignored.
         y_values : Tensor
@@ -119,12 +101,12 @@ class SCM:
         log_prob = self.total_log_probability(values_tensor)
         prob = torch.exp(log_prob)
         marginal = torch.trapezoid(prob, y_values)
-        log_marginal = torch.log(marginal + EPS)
+        log_marginal = torch.log(marginal)
 
         return log_prob - log_marginal
     
     @torch.no_grad()
-    def total_log_probability(self, values: Dict[Any, Tensor]) -> Tensor:
+    def total_log_probability(self, values: Dict[str, Tensor]) -> Tensor:
         """
         Compute the probabilities of the provided values under the SCM.
         The returned tensor has the same shape as the input values.
@@ -141,7 +123,7 @@ class SCM:
         return log_prob
     
     @torch.no_grad()
-    def marginal(self, values: Dict[Any, float], steps=100, low=-10.0, high=10.0) -> float:
+    def marginal(self, values: Dict[str, float], steps=100, low=-10.0, high=10.0) -> float:
         """
         Compute the marginal probability of the provided values.
         Currently assumes that exactly one variable is marginalized out.
@@ -173,18 +155,3 @@ class SCM:
         marginal = torch.trapezoid(probs, y)
         
         return torch.log(marginal).item()
-    
-
-def log_quad_exp(f, a, b) -> float:
-    """
-    Computes log(integral(exp(f(x)) dx)) numerically stably.
-    """
-    points = []
-    res = minimize_scalar(lambda x: -f(x), bounds=(a, b), method='bounded')
-    max_y, max_val  = res.x, -res.fun # type: ignore
-    points.append(max_y)
-    
-    integrand = lambda y: math.exp(f(y) - max_val)
-    integral, _ = quad(integrand, a, b, points=points, epsabs=1e-2, epsrel=1e-2)
-    
-    return max_val + math.log(integral)

@@ -1,30 +1,28 @@
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, List
 import torch
 import torch.distributions as dist
+import torch.nn as nn
 import networkx as nx
 
 from dopfnprior.scm.scm import SCM
-from dopfnprior.mechanisms.simple_mechanism import SimpleMechanism
-from dopfnprior.utils.sampling import TorchDistributionSampler
+from dopfnprior.scm.simple_mechanism import SimpleMechanism
+from dopfnprior.utils.sampling import TorchDistributionSampler, DistributionSampler
 
 
 class SCMBuilder:
     """
     Builder class for creating Structural Causal Models (SCMs) with configurable hyperparameters.
     
-    This class provides a comprehensive interface for building SCMs with various mechanism types,
-    noise distributions, and graph structures.
-    
     Constructor parameters
     ----------------------
     graph: nx.DiGraph
         The directed acyclic graph underlying this SCM.
-    
-    # Noise Distribution Parameters
-    root_std : float
-        The mean standard deviation used to sample noise of root nodes.
-    non_root_std : float
-        The mean standard deviation used to sample noise of non-root nodes.
+    activations : List[torch.nn.Module]
+        A list of activation functions to be used in the mechanisms.
+    root_std_dist : DistributionSampler
+        Distribution sampler for standard deviations of root node noise.
+    non_root_std_dist : DistributionSampler
+        Distribution sampler for standard deviations of non-root node noise.
     root_mean : float
         The mean use to sample noise of root nodes.
     non_root_mean : float
@@ -33,60 +31,55 @@ class SCMBuilder:
     
     def __init__(
         self,
-        # the underlying graph
         graph: nx.DiGraph,
-        *,
-        # noise parameters
-        root_std: float = 1.0,
-        non_root_std: float = 0.1,
+        activations: List[torch.nn.Module],
+        root_std_dist: DistributionSampler,
+        non_root_std_dist: DistributionSampler,
         root_mean: float = 0.0,
         non_root_mean: float = 0.0,
     ) -> None:
         # Store all parameters
         self.graph = graph
-        self.mean_root_std = root_std
-        self.mean_non_root_std = non_root_std
-        self.root_mean = root_mean if root_mean is not None else 0.0
-        self.non_root_mean = non_root_mean if non_root_mean is not None else 0.0
-        self.root_std = {}
-        self.non_root_std = {}
+        self.activations = activations
+        self.root_std_dist = root_std_dist
+        self.non_root_std_dist = non_root_std_dist
+        self.root_mean = root_mean
+        self.non_root_mean = non_root_mean
     
-    def sample(self, generator: torch.Generator) -> SCM:
-        """
-        Build and return a configured SCM based on the provided hyperparameters.
-        
-        Returns
-        -------
-        SCM
-            A fully configured Structural Causal Model ready for sampling.
-        """
+    def sample(self, generator: Optional[torch.Generator]) -> SCM:
+        """Build and return a configured SCM based on the provided hyperparameters."""
         # Step 1: Create mechanisms for each node
-        if not hasattr(self, 'mechanisms'):
-            nodes = self.graph.nodes
-            self.mechanisms = {v: SimpleMechanism(list(nodes), generator) for v in nodes}
+        self.mechanisms = self._create_mechanisms(generator)
         
         # Step 2: Create noise distributions
         # Note that creation of the distributions is deterministic and requires no generator
-        if not hasattr(self, 'noise'):
-            self.noise = self._create_noise_distribution(generator)
+        self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
-        scm = SCM(self.graph, self.mechanisms, self.noise, generator)
+        scm = SCM(self.graph, self.mechanisms, self.noise)
         
         return scm
     
-    def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Dict[Any, TorchDistributionSampler]:
+    def _create_mechanisms(self, generator: Optional[torch.Generator]) -> Dict[str, nn.Module]:
+        nodes = list(self.graph.nodes)
+        mechanisms = {}
+        for v in nodes:
+            activation_idx = int(torch.randint(0, len(self.activations), (1,), generator=generator))
+            activation = self.activations[activation_idx]
+            mech = SimpleMechanism(nodes, activation, generator)
+            mechanisms[v] = mech
+        return mechanisms
+    
+    def _create_noise_distribution(self, generator: Optional[torch.Generator]) -> Dict[str, DistributionSampler]:
         """Create noise distributions for exogenous and endogenous variables."""
         root_nodes = [v for v in self.graph.nodes() if not self.graph.predecessors(v)]
         non_root_nodes = [v for v in self.graph.nodes() if self.graph.predecessors(v)]
-        root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.mean_root_std))
-        non_root_std_gen = TorchDistributionSampler(dist.Exponential(rate=1/self.mean_non_root_std))
         
         noise = {}
         for v in root_nodes:
-            self.root_std[v] = root_std_gen.sample(generator)
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=self.root_std[v]))
+            std = self.root_std_dist.sample(generator)
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.root_mean, scale=std))
         for v in non_root_nodes:
-            self.non_root_std[v] = non_root_std_gen.sample(generator)
-            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=self.non_root_std[v]))
+            std = self.non_root_std_dist.sample(generator)
+            noise[v] = TorchDistributionSampler(dist.Normal(loc=self.non_root_mean, scale=std))
         return noise

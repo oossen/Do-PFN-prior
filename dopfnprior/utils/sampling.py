@@ -26,7 +26,7 @@ class DistributionSampler(ABC):
         singleton_tensor = self.sample_n(1, generator)
         return singleton_tensor.item()
     
-    def sample_shape(self, shape: Tuple[int, ...], generator: torch.Generator) -> torch.Tensor:
+    def sample_shape(self, shape: Tuple[int, ...], generator: Optional[torch.Generator] = None) -> torch.Tensor:
         """Fully vectorized sampling for any output shape."""
         N = int(math.prod(shape))
         flat = self.sample_n(N, generator=generator)
@@ -141,7 +141,7 @@ DISTRIBUTION_FACTORIES = {
         dist.LogNormal(loc=params["mean"], scale=params["std"])
     ),
     "exponential": lambda params: TorchDistributionSampler(
-        dist.Exponential(rate=params["lambd"])
+        dist.Exponential(rate=params["rate"])
     ),
     "gamma": lambda params: TorchDistributionSampler(
         dist.Gamma(concentration=params["alpha"], rate=params["beta"])

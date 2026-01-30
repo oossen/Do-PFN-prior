@@ -1,3 +1,21 @@
+import torch
+import torch.nn as nn
+
+
+# activation functions
+class TanhX2(nn.Module):
+    def forward(self, x):
+        return torch.tanh(torch.pow(x, 2))
+    
+class TanhReLU(nn.Module):
+    def forward(self, x):
+        return torch.tanh(torch.relu(x))
+    
+class Tanh(nn.Module):
+    def forward(self, x):
+        return torch.tanh(x)
+    
+
 prior_config = {
     
     "dataset_config": {
@@ -38,16 +56,22 @@ prior_config = {
         },
     },
 
-    "scm_config": {    
+    "noise_config": {    
         # the standard deviation of noise sampled at root nodes when propagating through the SCM
         # float
-        "root_std": {
-            "value": 0.3
+        "root_std_dist": {
+            "distribution": "exponential",
+            "distribution_parameters": {"rate": 1.0}
         },
         # the standard deviation of noise sampled at non-root nodes when propagating through the SCM
         # float
-        "non_root_std": {
-            "value": 0.3
+        "non_root_std_dist": {
+            "distribution": "exponential",
+            "distribution_parameters": {"rate": 1 / 0.1}
         },
-    }
+    },
+    
+    "activations": [TanhX2(), TanhReLU(), Tanh()],
 }
+    
+

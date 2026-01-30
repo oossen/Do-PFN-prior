@@ -1,12 +1,11 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import torch
 from torch import nn, Tensor
-from dopfnprior.mechanisms.activations import RandomActivation
 
 
 class SimpleMechanism(nn.Module):
     """
-    A simple mechanism consisting of a single linear layer followed by a random activation.
+    A simple mechanism consisting of a single linear layer followed by an activation.
 
     Constructor Parameters
     ----------------------
@@ -16,9 +15,10 @@ class SimpleMechanism(nn.Module):
         RNG for reproducibility of activation sampling.
     """
 
-    def __init__(self, node_names: list, generator: Optional[torch.Generator] = None) -> None:
+    def __init__(self, node_names: List[str], activation: nn.Module, generator: Optional[torch.Generator] = None) -> None:
         super().__init__()
         self.generator = generator
+        self.activation = activation
         weights_map = {}
         for v in node_names:
             initial_value = 2 * torch.rand(1, generator=self.generator) - 1
@@ -34,4 +34,4 @@ class SimpleMechanism(nn.Module):
             if v in parent_values:
                 weighted_inputs.append(parent_values[v] * weight)
         combined = torch.sum(torch.stack(weighted_inputs), dim=0)
-        return torch.tanh(3 * combined) + eps
+        return self.activation(combined) + eps
