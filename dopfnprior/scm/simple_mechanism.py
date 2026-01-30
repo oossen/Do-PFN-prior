@@ -29,6 +29,8 @@ class SimpleMechanism(nn.Module):
             initial_value = 2 * torch.rand(1, device=self.device, generator=self.generator) - 1
             weights_map[v] = nn.Parameter(initial_value)
         self.weights = nn.ParameterDict(weights_map)
+        bias_value = 2 * torch.rand(1, device=self.device, generator=self.generator) - 1
+        self.bias = nn.Parameter(bias_value)
 
     def forward(self, parent_values: Dict[Any, Tensor], eps: Tensor) -> Tensor:  
         if len(parent_values) == 0:
@@ -39,4 +41,4 @@ class SimpleMechanism(nn.Module):
             if v in parent_values:
                 weighted_inputs.append(parent_values[v] * weight)
         combined = torch.sum(torch.stack(weighted_inputs), dim=0)
-        return self.activation(combined) + eps
+        return self.activation(combined + self.bias) + eps
