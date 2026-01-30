@@ -11,17 +11,22 @@ class SimpleMechanism(nn.Module):
     ----------------------
     node_names : List[str]
         The names of all nodes in the SCM.
+    activation : nn.Module
+        The activation function to apply after the weighted sum.
+    device : torch.device
+        The device on which to place the parameters.
     generator : torch.Generator, optional
         RNG for reproducibility of activation sampling.
     """
 
-    def __init__(self, node_names: List[str], activation: nn.Module, generator: Optional[torch.Generator] = None) -> None:
+    def __init__(self, node_names: List[str], activation: nn.Module, device: torch.device, generator: Optional[torch.Generator] = None) -> None:
         super().__init__()
         self.generator = generator
         self.activation = activation
+        self.device = device
         weights_map = {}
         for v in node_names:
-            initial_value = 2 * torch.rand(1, generator=self.generator) - 1
+            initial_value = 2 * torch.rand(1, device=self.device, generator=self.generator) - 1
             weights_map[v] = nn.Parameter(initial_value)
         self.weights = nn.ParameterDict(weights_map)
 

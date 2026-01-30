@@ -50,8 +50,8 @@ class SCM:
     def sample_noise(self, sample_shape: Tuple[int, ...], generator: Optional[torch.Generator] = None) -> None:
         for v in self._topo:
             dist_v = self.noise[v]
-            e_v = dist_v.sample_shape(sample_shape, generator=generator)
-            self._sampled_noise[v] = e_v
+            eps_v = dist_v.sample_shape(sample_shape, generator=generator)
+            self._sampled_noise[v] = eps_v
 
     @torch.no_grad()
     def propagate(self) -> Dict[str, Tensor]:
@@ -91,7 +91,8 @@ class SCM:
         log_likelihood : Tensor
             The log-likelihood of the `y_values` given the other variables in `values`.
             Has the same shape as `y_values`.
-        """          
+        """
+        y_values = y_values.to(device=self.device, dtype=self.dtype)    
         shape_y = y_values.shape
         values_tensor = {y_var: y_values}
         for k, v in values.items():
@@ -113,6 +114,7 @@ class SCM:
         """
         sampled_noise = {}
         value_shape = list(values.values())[0].shape
+        values = {v: value.to(device=self.device, dtype=self.dtype) for v, value in values.items()}
         log_prob = torch.zeros(value_shape, device=self.device, dtype=self.dtype)
         for v in self._topo:
             mech = self.mechanisms[v]

@@ -27,6 +27,8 @@ class SCMBuilder:
         The mean use to sample noise of root nodes.
     non_root_mean : float
         The mean used to sample noise of non-root nodes.
+    device : torch.device
+        The device for the SCMs created.
     """
     
     def __init__(
@@ -37,6 +39,7 @@ class SCMBuilder:
         non_root_std_dist: DistributionSampler,
         root_mean: float = 0.0,
         non_root_mean: float = 0.0,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         # Store all parameters
         self.graph = graph
@@ -45,6 +48,7 @@ class SCMBuilder:
         self.non_root_std_dist = non_root_std_dist
         self.root_mean = root_mean
         self.non_root_mean = non_root_mean
+        self.device = device
     
     def sample(self, generator: Optional[torch.Generator]) -> SCM:
         """Build and return a configured SCM based on the provided hyperparameters."""
@@ -56,7 +60,7 @@ class SCMBuilder:
         self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
-        scm = SCM(self.graph, self.mechanisms, self.noise)
+        scm = SCM(self.graph, self.mechanisms, self.noise, device=self.device)
         
         return scm
     
@@ -66,7 +70,7 @@ class SCMBuilder:
         for v in nodes:
             activation_idx = int(torch.randint(0, len(self.activations), (1,), generator=generator))
             activation = self.activations[activation_idx]
-            mech = SimpleMechanism(nodes, activation, generator)
+            mech = SimpleMechanism(nodes, activation, self.device, generator)
             mechanisms[v] = mech
         return mechanisms
     
