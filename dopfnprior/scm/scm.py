@@ -71,18 +71,18 @@ class SCM:
         return xs
     
     @torch.no_grad()
-    def log_likelihood_batch(self, values: Dict[str, float], y_values: Tensor, y_var: str = 'y') -> Tensor:
+    def log_likelihood_batch(self, values: Dict[str, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
         """
         Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
-        The output is of the same shape as `y_values`.
         
         Parameters
         ----------
-        values : Dict[str, float]
-            Contains an observed value for each feature.
+        values : Dict[str, Tensor]
+            Contains observed values for each feature.
             If `y_var` is included, its values are ignored.
         y_values : Tensor
             The values of the target variable `y_var` for which to compute the log-likelihood.
+            Must be of shape (B,).
         y_var : str
             The name of the target variable.
             
@@ -90,18 +90,21 @@ class SCM:
         -------
         log_likelihood : Tensor
             The log-likelihood of the `y_values` given the other variables in `values`.
-            Has the same shape as `y_values`.
+            If the entries of `values` have shape (*), the returned tensor has shape (*, B).
         """
         y_values = y_values.to(device=self.device, dtype=self.dtype)    
         shape_y = y_values.shape
-        values_tensor = {y_var: y_values}
-        for k, v in values.items():
-            if k != y_var:
-                values_tensor[k] = torch.full(shape_y, v, device=self.device, dtype=self.dtype)
+        assert len(shape_y) == 1, f"y_values must be of shape (B,), but found {shape_y}"
+        values_shape = list(values.values())[0].shape
+        output_shape = (*values_shape, shape_y[0])
+        values_tensor = {y_var: y_values.expand(output_shape)}
+        for v, value in values.items():
+            if v != y_var:
+                values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
                 
         log_prob = self.total_log_probability(values_tensor)
         prob = torch.exp(log_prob)
-        marginal = torch.trapezoid(prob, y_values)
+        marginal = torch.trapezoid(prob, y_values, dim=-1)
         log_marginal = torch.log(marginal)
 
         return log_prob - log_marginal
