@@ -45,6 +45,19 @@ class SCM:
 
         # Fixed noise buffers
         self._sampled_noise: Dict[str, Tensor] = {}
+        
+    def __str__(self) -> str:
+        info = []
+        info.append(f"SCM on device={self.device}, dtype={self.dtype}")
+        info.append(f"Nodes: {list(self.dag.nodes())}")
+        for v in self._topo:
+            info.append(v)
+            info.append(f"Parents: {self._parents[v]}")
+            info.append(f"Activation: {self.mechanisms[v].activation}")
+            info.append(f"Bias: {self.mechanisms[v].bias}")
+            info.append(f"Weights: {self.mechanisms[v].weights}")
+            info.append(f"Noise std: {self.noise[v].std()}")
+        return "\n".join(info)
     
     @torch.no_grad()
     def sample_noise(self, sample_shape: Tuple[int, ...], generator: Optional[torch.Generator] = None) -> None:

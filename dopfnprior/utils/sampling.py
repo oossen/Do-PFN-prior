@@ -21,6 +21,11 @@ class DistributionSampler(ABC):
         """
         pass
     
+    @abstractmethod
+    def std(self) -> float:
+        """Return the standard deviation of the distribution."""
+        pass
+    
     def sample(self, generator: Optional[torch.Generator] = None) -> Any:
         """Sample just one value."""
         singleton_tensor = self.sample_n(1, generator)
@@ -46,6 +51,9 @@ class FixedSampler(DistributionSampler):
         equal = (value == self.value)
         log_probs = torch.where(equal, torch.zeros_like(value, dtype=torch.float32), torch.full_like(value, float('-inf'), dtype=torch.float32))
         return log_probs
+    
+    def std(self) -> float:
+        return 0.0
     
 
 class TorchDistributionSampler(DistributionSampler):
@@ -77,6 +85,9 @@ class TorchDistributionSampler(DistributionSampler):
             value = self.distribution.sample((n,))
 
         return value
+    
+    def std(self) -> float:
+        return self.distribution.stddev.item()
 
 
 class DiscreteUniformSampler(DistributionSampler):
@@ -105,8 +116,11 @@ class DiscreteUniformSampler(DistributionSampler):
                 torch.set_rng_state(old_generator)
         else:
             values = torch.randint(self.low, self.high + 1, (n,))
-        
         return values
+    
+    def std(self) -> float:
+        num_values = self.high - self.low + 1
+        return math.sqrt((num_values**2 - 1) / 12)
     
 
 class LogarithmicSampler(DistributionSampler):
@@ -127,6 +141,14 @@ class LogarithmicSampler(DistributionSampler):
     def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
         log_sample = self.uniform_sampler.sample_n(n, generator)
         return torch.exp(log_sample)
+    
+    def std(self) -> float:
+        a = math.exp(self.log_low)
+        b = math.exp(self.log_high)
+        mean = (b - a) / (math.log(b) - math.log(a))
+        mean_sq = ( (b**2 - a**2) / 2 ) / (math.log(b) - math.log(a))
+        variance = mean_sq - mean**2
+        return math.sqrt(variance)
     
 
 DISTRIBUTION_FACTORIES = {
