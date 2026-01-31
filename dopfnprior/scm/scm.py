@@ -4,6 +4,7 @@ from torch import Tensor
 import torch.nn as nn
 import networkx as nx
 
+from dopfnprior.scm.simple_mechanism import SimpleMechanism
 from dopfnprior.utils.sampling import DistributionSampler
 
 
@@ -53,9 +54,7 @@ class SCM:
         for v in self._topo:
             info.append(v)
             info.append(f"Parents: {self._parents[v]}")
-            info.append(f"Activation: {self.mechanisms[v].activation}")
-            info.append(f"Bias: {self.mechanisms[v].bias}")
-            info.append(f"Weights: {self.mechanisms[v].weights}")
+            info.append(f"Mechanism: {self.mechanisms[v]}")
             info.append(f"Noise std: {self.noise[v].std()}")
         return "\n".join(info)
     

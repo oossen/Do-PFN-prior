@@ -31,6 +31,14 @@ class SimpleMechanism(nn.Module):
         self.weights = nn.ParameterDict(weights_map)
         bias_value = 2 * torch.rand(1, device=self.device, generator=self.generator) - 1
         self.bias = nn.Parameter(bias_value)
+        
+    def __str__(self) -> str:
+        info = []
+        info.append(f"Activation: {self.activation}")
+        info.append(f"Bias: {self.bias.item()}")
+        weights = {v: value.item() for v, value in self.weights.items()}
+        info.append(f"Weights: {weights}")
+        return "\n".join(info)
 
     def forward(self, parent_values: Dict[Any, Tensor], eps: Tensor) -> Tensor:  
         if len(parent_values) == 0:
