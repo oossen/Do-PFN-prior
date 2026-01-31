@@ -186,6 +186,9 @@ DISTRIBUTION_FACTORIES = {
     "exponential": lambda params: TorchDistributionSampler(
         dist.Exponential(rate=params["rate"])
     ),
+    "shifted_exponential": lambda params: ShiftedExponentialSampler(
+        rate=params["rate"], shift=params["shift"]
+    ),
     "gamma": lambda params: TorchDistributionSampler(
         dist.Gamma(concentration=params["alpha"], rate=params["beta"])
     ),
