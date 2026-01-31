@@ -88,6 +88,27 @@ class TorchDistributionSampler(DistributionSampler):
     
     def std(self) -> float:
         return self.distribution.stddev.item()
+    
+
+class ShiftedExponentialSampler(DistributionSampler):
+    """Exponential distribution shifted by a fixed amount."""
+    def __init__(self, rate: float, shift: float):
+        self.rate = rate
+        self.shift = shift
+        self.exponential_sampler = TorchDistributionSampler(dist.Exponential(rate=rate))
+        
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        shifted_value = value - self.shift
+        log_probs = self.exponential_sampler.log_prob(shifted_value)
+        log_probs = torch.where(shifted_value >= 0, log_probs, torch.full_like(value, float('-inf'), dtype=torch.float32))
+        return log_probs
+    
+    def sample_n(self, n: int, generator: Optional[torch.Generator] = None) -> torch.Tensor:
+        exp_sample = self.exponential_sampler.sample_n(n, generator)
+        return exp_sample + self.shift
+    
+    def std(self) -> float:
+        return self.exponential_sampler.std()
 
 
 class DiscreteUniformSampler(DistributionSampler):
