@@ -103,9 +103,11 @@ class SCM:
                 values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
                 
         log_prob = self.total_log_probability(values_tensor)
-        prob = torch.exp(log_prob)
-        marginal = torch.trapezoid(prob, y_values, dim=-1)
-        log_marginal = torch.log(marginal).unsqueeze(-1)
+        # shift before integration for numerical stability
+        max_log_prob = torch.max(log_prob, dim=-1, keepdim=True)[0]
+        relative_prob = torch.exp(log_prob - max_log_prob)
+        marginal_relative = torch.trapezoid(relative_prob, y_values, dim=-1)
+        log_marginal = torch.log(marginal_relative).unsqueeze(-1) + max_log_prob
 
         return log_prob - log_marginal
     
