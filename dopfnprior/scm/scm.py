@@ -120,7 +120,7 @@ class SCM:
         # shift before integration for numerical stability
         max_log_prob = torch.max(log_prob, dim=-1, keepdim=True)[0]
         relative_prob = torch.exp(log_prob - max_log_prob)
-        marginal_relative = torch.trapezoid(relative_prob, y_values, dim=-1)
+        marginal_relative = torch.trapezoid(relative_prob, values_tensor[y_var], dim=-1)
         log_marginal = torch.log(marginal_relative).unsqueeze(-1) + max_log_prob
 
         return log_prob - log_marginal
