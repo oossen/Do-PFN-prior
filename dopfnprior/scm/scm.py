@@ -92,9 +92,10 @@ class SCM:
         values : Dict[str, Tensor]
             Contains observed values for each feature.
             If `y_var` is included, its values are ignored.
+            Each value should have shape (batch_size, n_cols).
         y_values : Tensor
             The values of the target variable `y_var` for which to compute the log-likelihood.
-            Must be of shape (B,).
+            Should have shape (batch_size, n_y_values).
         y_var : str
             The name of the target variable.
             
@@ -102,14 +103,15 @@ class SCM:
         -------
         log_likelihood : Tensor
             The log-likelihood of the `y_values` given the other variables in `values`.
-            If the entries of `values` have shape (*), the returned tensor has shape (*, B).
+            Has shape (batch_size, n_cols, n_y_values).
         """
         y_values = y_values.to(device=self.device, dtype=self.dtype)    
-        shape_y = y_values.shape
-        assert len(shape_y) == 1, f"y_values must be of shape (B,), but found {shape_y}"
+        batch_size, n_y_values = y_values.shape
         values_shape = list(values.values())[0].shape
-        output_shape = (*values_shape, shape_y[0])
-        values_tensor = {y_var: y_values.expand(output_shape)}
+        assert values_shape[0] == batch_size, "Batch size of values and y_values must match."
+        n_cols =values_shape[1]
+        output_shape = (batch_size, n_cols, n_y_values)
+        values_tensor = {y_var: y_values.unsqueeze(1).expand(output_shape)}
         for v, value in values.items():
             if v != y_var:
                 values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
