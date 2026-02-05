@@ -109,7 +109,7 @@ class SCM:
         batch_size, n_y_values = y_values.shape
         values_shape = list(values.values())[0].shape
         assert values_shape[0] == batch_size, "Batch size of values and y_values must match."
-        n_cols =values_shape[1]
+        n_cols = values_shape[1]
         output_shape = (batch_size, n_cols, n_y_values)
         values_tensor = {y_var: y_values.unsqueeze(1).expand(output_shape)}
         for v, value in values.items():
@@ -144,35 +144,28 @@ class SCM:
         return log_prob
     
     @torch.no_grad()
-    def marginal(self, values: Dict[str, float], steps=100, low=-10.0, high=10.0) -> float:
+    def marginal(self, values: Dict[str, Tensor], steps=100, low=-10.0, high=10.0) -> Tensor:
         """
-        Compute the marginal probability of the provided values.
+        Compute the marginal probabilities of the provided values.
         Currently assumes that exactly one variable is marginalized out.
+        The returned tensor has the same shape as the input values.
         """
         expected_keys = self.dag.nodes()
         missing = set(expected_keys) - set(values.keys())
         assert len(missing) == 1, f"Expected exactly 1 missing key, but found {len(missing)}: {missing}"
         
-        y_explore = torch.linspace(low, high, steps, device=self.device, dtype=self.dtype)
+        y_values = torch.linspace(low, high, steps, device=self.device, dtype=self.dtype)
         y_var = missing.pop()
-        values_tensor = {y_var: y_explore}
-        for k, v in values.items():
-            if k != y_var:
-                values_tensor[k] = torch.full(y_explore.shape, v, device=self.device, dtype=self.dtype)
+        values_shape = list(values.values())[0].shape
+        output_shape = values_shape + (steps,)
+        values_tensor = {y_var: y_values.unsqueeze(0).unsqueeze(0).expand(output_shape)}
+        for v, value in values.items():
+            if v != y_var:
+                values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
+        log_prob = self.total_log_probability(values_tensor)
+        max_log_prob = torch.max(log_prob, dim=-1, keepdim=False)[0]
+        relative_prob = torch.exp(log_prob - max_log_prob)
+        marginal_relative = torch.trapezoid(relative_prob, values_tensor[y_var], dim=-1)
+        log_marginal = torch.log(marginal_relative) + max_log_prob
         
-        log_p_explore = self.total_log_probability(values_tensor)
-        eps = log_p_explore.max() - 100
-        mask = log_p_explore > eps
-        indices = torch.where(mask)[0]
-        buffer = 1
-        start_idx = max(0, indices[0] - buffer)
-        end_idx = min(len(y_explore) - 1, indices[-1] + buffer)
-        a = y_explore[start_idx]
-        b = y_explore[end_idx]
-
-        y = torch.linspace(a, b, steps)
-        values_tensor[y_var] = y
-        probs = torch.exp(self.total_log_probability(values_tensor))
-        marginal = torch.trapezoid(probs, y)
-        
-        return torch.log(marginal).item()
+        return log_marginal
