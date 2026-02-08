@@ -81,12 +81,14 @@ class ObservationalDataLoader(DataLoader):
         y_values = data['y']
         q = torch.linspace(0, 1, steps=num_classes+1, device=y_values.device)[1:-1]
         thresholds = torch.quantile(y_values, q, dim=1).transpose(0, 1)
-        buckets = torch.bucketize(y_values, thresholds)
+        buckets = torch.stack([torch.bucketize(y_values[i], thresholds[i]) for i in range(self.batch_size)], dim=0)
+        label_map = torch.randperm(num_classes, device=y_values.device, generator=self.generator)
+        shuffled_buckets = label_map[buckets]
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}
         full_data['x'] = torch.stack([data[v] for v in data.keys() if v != 'y'], dim=2)  # shape (B, N, F)
-        full_data['y'] = buckets.unsqueeze(-1)
+        full_data['y'] = shuffled_buckets
         full_data['target_y'] = full_data['y'] # required by the current NanoTabPFN train loop
         full_data['sep'] = num_train_samples
         
