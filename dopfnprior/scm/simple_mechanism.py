@@ -49,4 +49,9 @@ class SimpleMechanism(nn.Module):
             if v in parent_values:
                 weighted_inputs.append(parent_values[v] * weight)
         combined = torch.sum(torch.stack(weighted_inputs), dim=0)
-        return self.activation(combined + self.bias) + eps
+        out = self.activation(combined + self.bias) + eps
+        # z-normalization
+        mean = out.mean(dim=1, keepdim=True)
+        std = out.std(dim=1, keepdim=True) + 1e-2
+        out = (out - mean) / std
+        return out
