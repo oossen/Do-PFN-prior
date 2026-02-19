@@ -22,7 +22,7 @@ class CategoricalSampler:
 
     def sample(self, generator: Optional[torch.Generator] = None) -> Any:
         idx = self.categorical.sample(generator)
-        return self.choices[int(idx.item())]
+        return self.choices[idx]
     
     def log_prob(self, value: Any) -> float:
         if value not in self.choices:
