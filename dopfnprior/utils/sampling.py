@@ -1,9 +1,38 @@
 from abc import ABC, abstractmethod
 import math
-from typing import Any, Dict, Literal, Optional, Tuple, Union, overload
+from typing import List, Any, Dict, Optional, Tuple
 
 import torch
 import torch.distributions as dist
+
+
+class CategoricalSampler:
+    """
+    Sampler for categorical variables.
+    Note that this is *not* a `DistributionSampler`, since it doesn't support returning batches.
+    """
+    def __init__(self, choices: List[Any], probabilities: Optional[List[float]] = None):
+        self.choices = choices
+        if probabilities is not None:
+            self.probabilities = torch.tensor(probabilities)
+        else:
+            self.probabilities = torch.ones(len(choices)) / len(choices)
+        distribution = dist.Categorical(probs=self.probabilities)
+        self.categorical = TorchDistributionSampler(distribution)
+
+    def sample(self, generator: Optional[torch.Generator] = None) -> Any:
+        idx = self.categorical.sample(generator)
+        return self.choices[int(idx.item())]
+    
+    def log_prob(self, value: Any) -> float:
+        if value not in self.choices:
+            return float('-inf')
+        idx = self.choices.index(value)
+        log_prob = self.categorical.log_prob(torch.tensor([idx]))
+        return log_prob.item()
+    
+    def std(self) -> float:
+        return self.categorical.std()
 
 
 class DistributionSampler(ABC):
@@ -200,6 +229,9 @@ DISTRIBUTION_FACTORIES = {
     "logarithmic": lambda params: LogarithmicSampler(
         params["low"], params["high"]
     ),
+    "categorical": lambda params: CategoricalSampler(
+        choices=params["choices"], probabilities=params.get("probabilities")
+    ),
 }
 
 
@@ -251,31 +283,11 @@ def build_samplers(config: Dict[str, Any],
 
     return samplers
 
-@overload
-def sample_parameters(samplers: Dict[str, Any], 
-                      generator: Optional[torch.Generator]=None, 
-                      return_log_prob: Literal[False] = False) -> Dict[str, Any]: ...
 
-@overload
-def sample_parameters(samplers: Dict[str, Any], 
-                      generator: Optional[torch.Generator]=None, 
-                      return_log_prob: Literal[True] = True) -> Tuple[Dict[str, Any], float]: ...
-
-def sample_parameters(samplers: Dict[str, Any], 
-                      generator: Optional[torch.Generator]=None, 
-                      return_log_prob=False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], float]]:
+def sample_parameters(samplers: Dict[str, Any], generator: Optional[torch.Generator]=None) -> Dict[str, Any]:
     """Sample parameters from samplers with type validation."""
     sampled_params = {}
     for param_name, sampler in samplers.items():
         value = sampler.sample(generator)
         sampled_params[param_name] = value
-    
-    if return_log_prob:
-        total_log_prob = 0.0
-        for param_name, sampler in samplers.items():
-            value = sampled_params[param_name]
-            log_prob = sampler.log_prob(torch.tensor([value]))
-            total_log_prob += log_prob
-        return sampled_params, total_log_prob
-
     return sampled_params
