@@ -6,7 +6,7 @@ import networkx as nx
 
 from dopfnprior.scm.scm import SCM
 from dopfnprior.scm.simple_mechanism import SimpleMechanism
-from dopfnprior.utils.sampling import TorchDistributionSampler, DistributionSampler
+from dopfnprior.utils.sampling import TorchDistributionSampler, DistributionSampler, CategoricalSampler
 
 
 class SCMBuilder:
@@ -17,8 +17,8 @@ class SCMBuilder:
     ----------------------
     graph: nx.DiGraph
         The directed acyclic graph underlying this SCM.
-    activations : List[torch.nn.Module]
-        A list of activation functions to be used in the mechanisms.
+    activation_dist : CategoricalSampler
+        Sampler for choosing a mechanism's activation.
     root_std_dist : DistributionSampler
         Distribution sampler for standard deviations of root node noise.
     non_root_std_dist : DistributionSampler
@@ -34,7 +34,7 @@ class SCMBuilder:
     def __init__(
         self,
         graph: nx.DiGraph,
-        activations: List[torch.nn.Module],
+        activation_dist: CategoricalSampler,
         root_std_dist: DistributionSampler,
         non_root_std_dist: DistributionSampler,
         root_mean: float = 0.0,
@@ -43,7 +43,7 @@ class SCMBuilder:
     ) -> None:
         # Store all parameters
         self.graph = graph
-        self.activations = activations
+        self.activation_dist = activation_dist
         self.root_std_dist = root_std_dist
         self.non_root_std_dist = non_root_std_dist
         self.root_mean = root_mean
@@ -68,8 +68,7 @@ class SCMBuilder:
         nodes = list(self.graph.nodes)
         mechanisms = {}
         for v in nodes:
-            activation_idx = int(torch.randint(0, len(self.activations), (1,), generator=generator))
-            activation = self.activations[activation_idx]
+            activation = self.activation_dist.sample(generator)
             mech = SimpleMechanism(nodes, activation, self.device, generator)
             mechanisms[v] = mech
         return mechanisms
