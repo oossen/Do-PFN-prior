@@ -39,11 +39,11 @@ class ObservationalDataLoader(DataLoader):
         
         self.prior_config = prior_config
         self.graph_config = prior_config["graph_config"]
-        self.noise_config = prior_config["noise_config"]
+        self.scm_config = prior_config["scm_config"]
         self.dataset_config = prior_config["dataset_config"]
         
         self.graph_samplers = build_samplers(self.graph_config, "graph")
-        self.noise_samplers = build_samplers(self.noise_config, "noise")
+        self.scm_samplers = build_samplers(self.scm_config, "scm")
         self.dataset_samplers = build_samplers(self.dataset_config, "dataset")
         
     def __len__(self) -> int:
@@ -64,9 +64,7 @@ class ObservationalDataLoader(DataLoader):
         graph = graph_builder.sample(self.generator)
             
         # sample SCM
-        activations = self.prior_config["activations"]
-        root_std_dist, non_root_std_dist = self.noise_samplers["root_std_dist"], self.noise_samplers["non_root_std_dist"]
-        scm_builder = SCMBuilder(graph, activations=activations, root_std_dist=root_std_dist, non_root_std_dist=non_root_std_dist)
+        scm_builder = SCMBuilder(graph, **self.scm_samplers)
         scm = scm_builder.sample(self.generator)
             
         # sample dataset parameters
@@ -79,12 +77,15 @@ class ObservationalDataLoader(DataLoader):
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
         data = scm.propagate()
+        visible_data = {v: x for v, x in data.items() if not graph.nodes[v].get("hidden", False)}
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}
-        full_data['x'] = torch.stack([data[v] for v in data.keys() if v != 'y'], dim=2)  # shape (B, N, F)
-        full_data['y'] = data['y'].unsqueeze(-1)
+        full_data['x'] = torch.stack([visible_data[v] for v in visible_data.keys() if v != 'y'], dim=2)  # shape (B, N, F)
+        full_data['y'] = visible_data['y'].unsqueeze(-1)
         full_data['target_y'] = full_data['y'] # required by the current NanoTabPFN train loop
         full_data['single_eval_pos'] = num_train_samples
+        full_data['scm'] = scm
+        full_data['data'] = data # including hidden data, for ce loss
         
         return full_data

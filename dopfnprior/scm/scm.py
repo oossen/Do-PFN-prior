@@ -4,7 +4,6 @@ from torch import Tensor
 import torch.nn as nn
 import networkx as nx
 
-from dopfnprior.scm.simple_mechanism import SimpleMechanism
 from dopfnprior.utils.sampling import DistributionSampler
 
 
@@ -78,8 +77,6 @@ class SCM:
             x = mech(parents_feat, eps=eps_v)
             xs[v] = x
 
-        # only return data for non-hidden nodes
-        xs = {v: x for v, x in xs.items() if not self.dag.nodes[v].get("hidden", False)}
         return xs
     
     @torch.no_grad()

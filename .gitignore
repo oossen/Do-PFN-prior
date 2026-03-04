@@ -1,5 +1,8 @@
 .venv/
 .vscode/
 workdir/
+visualization/
+logs/
 
 *.pyc
+*.sh
