@@ -14,7 +14,7 @@ from dopfnprior.configs.default_config import prior_config
 
 device = get_default_device()
 seed = 42
-nll = True
+nll = False
 
 prior = ObservationalDataLoader(num_steps=10000,
                                 batch_size=4,

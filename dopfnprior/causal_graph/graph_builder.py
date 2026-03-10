@@ -12,7 +12,10 @@ class GraphBuilder:
     a random topological order (random permutation).
     """
 
-    def __init__(self, num_nodes: int, edge_prob: float, dropout_prob: float) -> None:
+    def __init__(self, num_nodes: int, 
+                 edge_prob: float,  
+                 dropout_prob: float,
+                 features_per_node_dist) -> None:
         """
         Parameters
         ----------
@@ -21,6 +24,8 @@ class GraphBuilder:
         edge_prob : float
             Probability of an edge between any ordered pair (i < j) in a random
             topological order. Must be in [0, 1].
+        features_per_node : int
+            The dimension of each node in the graph.
         dropout_prob : float
             Probability of making a given node hidden.
         """
@@ -30,6 +35,7 @@ class GraphBuilder:
         edge_prob_min = 2 / (num_nodes ** 1.2)
         self.edge_prob = max(edge_prob_min, edge_prob) 
         self.dropout_prob = dropout_prob
+        self.features_per_node_dist = features_per_node_dist
     
     def sample(self, generator: Optional[torch.Generator]) -> nx.DiGraph:
         """
@@ -77,27 +83,28 @@ class GraphBuilder:
         if len(G.edges) == 0:
             return self.sample(generator)
         
-        # Hide some nodes
-        attribute_dict = {
-            v: torch.rand(1, generator=generator) < self.dropout_prob 
-            for v in G.nodes()
-        }
-        nx.set_node_attributes(G, attribute_dict, name="hidden")
+        # Hide some features and set node dimensions
+        hidden_dict = {}, visible_dict = {}, dim_dict = {}
+        for v in G.nodes():
+            node_dim = self.features_per_node_dist.sample(generator)
+            dim_dict[v] = node_dim
+            n_hidden = self.rng.binomial(node_dim, self.dropout_prob)
+            n_visible = node_dim - n_hidden
+            hidden_dict[v] = n_hidden
+            visible_dict[v] = n_visible
+        nx.set_node_attributes(G, dim_dict, name="dimension")
+        nx.set_node_attributes(G, hidden_dict, name="n_hidden")
+        nx.set_node_attributes(G, visible_dict, name="n_visible")
         
-        # select target and rename
-        visible_nodes = [v for v in G.nodes if not G.nodes[v]["hidden"]]
-        # resample if less than 2 visible nodes
-        if len(visible_nodes) < 2:
+        # select target
+        target_node = G.nodes()[-1]
+        # resample if target node has no visible features
+        if G.nodes()[target_node]["n_visible"] == 0:
             return self.sample(generator)
-        hidden_nodes = [v for v in G.nodes if G.nodes[v]["hidden"]]
-        target_node = visible_nodes[-1]
-        # resample if target node is isolated
-        if G.in_degree(target_node) == 0 or G.out_degree(target_node) == 0:
-            return self.sample(generator)
+
+        # rename nodes
         renaming = {}
-        for v in hidden_nodes:
-            renaming[v] = f"u{str(v)}"
-        for v in visible_nodes:
+        for v in G.nodes():
             if v != target_node:    
                 renaming[v] = f"x{str(v)}"
         renaming[target_node] = "y"

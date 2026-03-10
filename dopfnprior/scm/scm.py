@@ -5,24 +5,43 @@ import torch.nn as nn
 import networkx as nx
 
 from dopfnprior.utils.sampling import DistributionSampler
+from dopfnprior.utils.likelihood_wrapper import LikelihoodWrapper
 
 
 class SCM:
     """
     Structural Causal Model with vectorized ancestral sampling.
 
-    Workflow
-    --------
-    1) scm.sample_noise(B)                 # samples and fixes noise (B is any shape)
-    2) xs = scm.propagate()                # uses the fixed noises
-
     Parameters
     ----------
-    dag : CausalDAG
+    dag : nx.DiGraph[str]
+        The DAG underlying the SCM.
+        Each node should have a node feature `dimension`.
     mechanisms : Dict[str, nn.Module]
+        The mechanisms for each node.
+        Should be a *deterministic* function of parent values.
     noise : Dict[str, DistributionSampler]
-    device : torch.device
-    dtype : torch.dtype
+        The noise distributions for each node.
+        Must implement sampling of noise and log-probabilities for any input shape.
+    post_activations : Dict[str, nn.Module]
+        Optional post-activation functions for each node.
+        If not provided, no post-activation is applied.
+    
+    Workflow
+    --------
+    1) scm.sample_noise(S)                 # samples and fixes noise (S is any shape)
+    2) xs = scm.propagate()                # uses the fixed noises
+    
+    Denoting by `f_i`, `eps_i`, and `g_i` the mechanism, noise, and post-activation for node `i`, the SCM implements
+    the structural causal model determined by the equations:
+    
+        x_i = g_i(f_i(parents(x_i)) + eps_i)
+    
+    When called with shape S = (s_1, ..., s_n), both the sampled noise and the propagated values have shape
+    
+        (s_1, ..., s_n, d_i),
+        
+    where d_i is the dimension of node i.
     """
 
     def __init__(
@@ -30,14 +49,12 @@ class SCM:
         dag: nx.DiGraph,
         mechanisms: Dict[str, nn.Module],
         noise: Dict[str, DistributionSampler],
-        device: torch.device = torch.device("cpu"),
-        dtype: torch.dtype = torch.float32,
+        post_activations: Dict[str, nn.Module],
     ) -> None:
         self.dag = dag
         self.mechanisms = mechanisms
         self.noise = noise
-        self.device = device
-        self.dtype = dtype
+        self.post_activations = post_activations
 
         # Topology and parents
         self._topo: List[str] = list(nx.topological_sort(dag))
@@ -48,8 +65,7 @@ class SCM:
         
     def __str__(self) -> str:
         info = []
-        info.append(f"SCM on device={self.device}, dtype={self.dtype}")
-        info.append(f"Nodes: {list(self.dag.nodes())}")
+        info.append(f"SCM with nodes: {list(self.dag.nodes())}")
         for v in self._topo:
             info.append(v)
             info.append(f"Parents: {self._parents[v]}")
@@ -59,68 +75,44 @@ class SCM:
     
     @torch.no_grad()
     def sample_noise(self, sample_shape: Tuple[int, ...], generator: Optional[torch.Generator] = None) -> None:
+        """
+        Sample and save noise for each node in the SCM.
+        
+        Parameters
+        ----------
+        sample_shape : tuple of int
+            The shape of the data to be sampled for each feature.
+            If a node has dimension d, the sampled noise for that node will have shape `sample_shape + (d,)`.
+        generator : torch.Generator, optional
+            To make the sampling process reproducible.
+        """
+        
         for v in self._topo:
             dist_v = self.noise[v]
-            eps_v = dist_v.sample_shape(sample_shape, generator=generator)
+            sample_shape_v = sample_shape + (self.dag.nodes[v].get("dimension", 1),)
+            eps_v = dist_v.sample_shape(sample_shape_v, generator=generator)
             self._sampled_noise[v] = eps_v
 
     @torch.no_grad()
     def propagate(self) -> Dict[str, Tensor]:
+        """
+        Propagate through the SCM using the fixed noise sampled by `sample_noise`.
+        Returns a dictionary mapping each node to its sampled value.
+        All values have the same shape as their corresponding noise.
+        """
         xs: Dict[str, Tensor] = {}
         for v in self._topo:
             mech = self.mechanisms[v]
             parents_feat = {}
             for p in self._parents[v]:
                 parents_feat[p] = xs[p]
-            eps_v = self._sampled_noise[v].to(device=self.device, dtype=self.dtype)
-
-            x = mech(parents_feat, eps=eps_v)
+            eps_v = self._sampled_noise[v]
+            x = mech(parents_feat) + eps_v
+            if v in self.post_activations:
+                x = self.post_activations[v](x)
             xs[v] = x
 
-        return xs
-    
-    @torch.no_grad()
-    def log_likelihood_batch(self, values: Dict[str, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
-        """
-        Compute the log-likelihood of the provided values of `y_var` conditioned on all other variables.
-        
-        Parameters
-        ----------
-        values : Dict[str, Tensor]
-            Contains observed values for each feature.
-            If `y_var` is included, its values are ignored.
-            Each value should have shape (batch_size, n_cols).
-        y_values : Tensor
-            The values of the target variable `y_var` for which to compute the log-likelihood.
-            Should have shape (batch_size, n_y_values).
-        y_var : str
-            The name of the target variable.
-            
-        Returns
-        -------
-        log_likelihood : Tensor
-            The log-likelihood of the `y_values` given the other variables in `values`.
-            Has shape (batch_size, n_cols, n_y_values).
-        """
-        y_values = y_values.to(device=self.device, dtype=self.dtype)    
-        batch_size, n_y_values = y_values.shape
-        values_shape = list(values.values())[0].shape
-        assert values_shape[0] == batch_size, "Batch size of values and y_values must match."
-        n_cols = values_shape[1]
-        output_shape = (batch_size, n_cols, n_y_values)
-        values_tensor = {y_var: y_values.unsqueeze(1).expand(output_shape)}
-        for v, value in values.items():
-            if v != y_var:
-                values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
-                
-        log_prob = self.total_log_probability(values_tensor)
-        # shift before integration for numerical stability
-        max_log_prob = torch.max(log_prob, dim=-1, keepdim=True)[0]
-        relative_prob = torch.exp(log_prob - max_log_prob)
-        marginal_relative = torch.trapezoid(relative_prob, values_tensor[y_var], dim=-1)
-        log_marginal = torch.log(marginal_relative).unsqueeze(-1) + max_log_prob
-
-        return log_prob - log_marginal
+        return 
     
     @torch.no_grad()
     def total_log_probability(self, values: Dict[str, Tensor]) -> Tensor:
@@ -130,39 +122,30 @@ class SCM:
         """
         sampled_noise = {}
         value_shape = list(values.values())[0].shape
-        values = {v: value.to(device=self.device, dtype=self.dtype) for v, value in values.items()}
-        log_prob = torch.zeros(value_shape, device=self.device, dtype=self.dtype)
+        log_prob = torch.zeros(value_shape)
         for v in self._topo:
             mech = self.mechanisms[v]
             parents_feat = {p: values[p] for p in self._parents[v]}
-            x = mech(parents_feat, eps=torch.zeros(value_shape, device=self.device, dtype=self.dtype))
+            x = mech(parents_feat)
             sampled_noise[v] = values[v] - x
             log_prob += self.noise[v].log_prob(sampled_noise[v])
         return log_prob
     
     @torch.no_grad()
-    def marginal(self, values: Dict[str, Tensor], steps=100, low=-10.0, high=10.0) -> Tensor:
-        """
-        Compute the marginal probabilities of the provided values.
-        Currently assumes that exactly one variable is marginalized out.
-        The returned tensor has the same shape as the input values.
-        """
-        expected_keys = self.dag.nodes()
-        missing = set(expected_keys) - set(values.keys())
-        assert len(missing) == 1, f"Expected exactly 1 missing key, but found {len(missing)}: {missing}"
+    def log_likelihood_batch(self, values: Dict[str, Tensor], y_values: Tensor, y_var: str = 'y') -> Tensor:
         
-        y_values = torch.linspace(low, high, steps, device=self.device, dtype=self.dtype)
-        y_var = missing.pop()
-        values_shape = list(values.values())[0].shape
-        output_shape = values_shape + (steps,)
-        values_tensor = {y_var: y_values.unsqueeze(0).unsqueeze(0).expand(output_shape)}
-        for v, value in values.items():
-            if v != y_var:
-                values_tensor[v] = value.unsqueeze(-1).expand(output_shape)
-        log_prob = self.total_log_probability(values_tensor)
-        max_log_prob = torch.max(log_prob, dim=-1, keepdim=False)[0]
-        relative_prob = torch.exp(log_prob - max_log_prob)
-        marginal_relative = torch.trapezoid(relative_prob, values_tensor[y_var], dim=-1)
-        log_marginal = torch.log(marginal_relative) + max_log_prob
+        def mechanism_fn(values: Dict[str, Tensor]) -> Dict[str, Tensor]:
+            noise_free_values = {}
+            for v in self._topo:
+                mech = self.mechanisms[v]
+                parents_feat = {p: values[p] for p in self._parents[v]}
+                x = mech(parents_feat)
+                noise_free_values[v] = x
+            return noise_free_values
         
-        return log_marginal
+        def noise_fn(noise_residuals: Dict[str, Tensor]) -> Tensor:
+            log_probs = [self.noise[v].log_prob(noise_residuals[v]).sum(dim=-1) for v in self._topo]
+            return sum(log_probs)
+        
+        wrapper = LikelihoodWrapper(mechanism_fn, noise_fn)
+        return wrapper.log_likelihood_batch(values, y_values, y_var)

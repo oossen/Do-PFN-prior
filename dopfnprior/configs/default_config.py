@@ -61,7 +61,13 @@ prior_config = {
             "distribution": "logarithmic",
             "distribution_parameters": {"low": 0.1, "high": 0.4}
         },
-        # probability of making a given node hidden
+        # the number of features contained in each node
+        # int
+        "features_per_node": {
+            "distribution": "discrete_uniform",
+            "distribution_parameters": {"low": 1, "high": 3},
+        },
+        # probability of making a given feature hidden
         # float
         "dropout_prob": {
             "distribution": "uniform",

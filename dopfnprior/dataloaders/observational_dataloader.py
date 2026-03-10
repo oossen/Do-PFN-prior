@@ -42,7 +42,9 @@ class ObservationalDataLoader(DataLoader):
         self.scm_config = prior_config["scm_config"]
         self.dataset_config = prior_config["dataset_config"]
         
-        self.graph_samplers = build_samplers(self.graph_config, "graph")
+        all_graph_samplers = build_samplers(self.graph_config, "graph")
+        self.features_per_node_sampler = all_graph_samplers["features_per_node"]
+        self.graph_samplers = {name: sampler for name, sampler in all_graph_samplers.items() if name != "features_per_node"}
         self.scm_samplers = build_samplers(self.scm_config, "scm")
         self.dataset_samplers = build_samplers(self.dataset_config, "dataset")
         
@@ -58,9 +60,9 @@ class ObservationalDataLoader(DataLoader):
         return iter(self.batch_function() for _ in range(self.num_steps))
     
     def batch_function(self):
-        # sample graph
+        # sample graph -- the number of features per node is not yet sampled, since it should be different for each node
         graph_params = sample_parameters(self.graph_samplers, self.generator)
-        graph_builder = GraphBuilder(**graph_params)
+        graph_builder = GraphBuilder(**graph_params, features_per_node_dist=self.features_per_node_sampler)
         graph = graph_builder.sample(self.generator)
             
         # sample SCM
@@ -77,12 +79,15 @@ class ObservationalDataLoader(DataLoader):
         sample_shape = (self.batch_size, total_samples)
         scm.sample_noise(sample_shape, generator=self.generator)
         data = scm.propagate()
-        visible_data = {v: x for v, x in data.items() if not graph.nodes[v].get("hidden", False)}
+        visible_data = {v: x[:, :, :graph.nodes[v]["n_visible"]] for v, x in data.items()}
+        # target data
+        target_data = visible_data['y'][:, :, 0].unsqueeze(-1) # shape (B, N, 1)
+        visible_data['y'] = visible_data['y'][:, :, 1:]
             
         # aggregate data in the format required by NanoTabPFN
         full_data = {}
-        full_data['x'] = torch.stack([visible_data[v] for v in visible_data.keys() if v != 'y'], dim=2)  # shape (B, N, F)
-        full_data['y'] = visible_data['y'].unsqueeze(-1)
+        full_data['x'] = torch.cat([visible_data[v] for v in visible_data.keys()], dim=2)  # shape (B, N, F)
+        full_data['y'] = target_data
         full_data['target_y'] = full_data['y'] # required by the current NanoTabPFN train loop
         full_data['single_eval_pos'] = num_train_samples
         full_data['scm'] = scm
