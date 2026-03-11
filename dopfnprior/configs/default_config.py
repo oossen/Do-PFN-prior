@@ -36,7 +36,7 @@ prior_config = {
         # int
         "number_train_samples_per_dataset": {
             "distribution": "discrete_uniform",
-            "distribution_parameters": {"low": 10, "high": 100}
+            "distribution_parameters": {"low": 50, "high": 100}
         },
         # number of test samples per dataset
         # can be fixed because architecture is agnostic to the number of test samples

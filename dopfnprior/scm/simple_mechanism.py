@@ -29,19 +29,19 @@ class SimpleMechanism(nn.Module):
                  generator: Optional[torch.Generator] = None) -> None:
         super().__init__()
         self.activation = activation
-        weights_map = {}
+        linear_layers = {}
         for v in node_dims:
             layer = nn.Linear(node_dims[v], node_dims[node])
             # make initialization of the linear layer deterministic
             nn.init.uniform_(layer.weight, a=-1.0, b=1.0, generator=generator)
             nn.init.uniform_(layer.bias, a=-1.0, b=1.0, generator=generator)
-            weights_map[v] = layer
+            linear_layers[v] = layer
 
-        self.weights = nn.ModuleDict(weights_map)
+        self.linear_layers = nn.ModuleDict(linear_layers)
 
     def forward(self, parent_values: Dict[Any, Tensor]) -> Tensor:  
         contributions = []
-        for v, layer in self.weights.items():
+        for v, layer in self.linear_layers.items():
             if v in parent_values:
                 contributions.append(layer(parent_values[v]))
         combined = torch.stack(contributions).sum(dim=0)

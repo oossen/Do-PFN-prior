@@ -56,14 +56,14 @@ class SCMBuilder:
         self.noise = self._create_noise_distribution(generator)
         
         # Step 3: Build the SCM
-        scm = SCM(self.graph, self.mechanisms, self.noise)
+        scm = SCM(self.graph, self.mechanisms, self.noise, post_activations={})
         
         return scm
     
     def _create_mechanisms(self, generator: Optional[torch.Generator]) -> Dict[str, nn.Module]:
         nodes = list(self.graph.nodes)
         mechanisms = {}
-        for v in nodes:
+        for v in [v for v in nodes if self.graph.in_degree(v) > 0]:  # only create mechanisms for non-root nodes
             activation = self.activation_dist.sample(generator)
             node_dims = {v: self.graph.nodes[v].get("dimension", 1) for v in nodes}
             mech = SimpleMechanism(v, node_dims, activation, generator)

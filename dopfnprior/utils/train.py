@@ -62,6 +62,7 @@ def train(model: NanoTabPFNModel,
     optimizer = schedulefree.AdamWScheduleFree(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=0.0)
     if ckpt_path is not None:
         optimizer.load_state_dict(state_dict['optimizer'])
+    buckets = buckets.to(device)
     bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 
     try:
@@ -86,7 +87,7 @@ def train(model: NanoTabPFNModel,
                     # if there are 1001 bucket borders (1000 buckets), clamp to [0, 999]
                     targets = (torch.bucketize(y_values, buckets) - 1).clamp(0, buckets.size(0) - 2)
                 else:
-                    test_data = {v: full_data['data'][v][:, single_eval_pos:] for v in full_data['data']}
+                    test_data = {v: full_data['data'][v][:, single_eval_pos:].to(device) for v in full_data['data']}
                     scm = full_data['scm']
                     batch_size = data[0].shape[0]
                     log_probs = scm.log_likelihood_batch(test_data, bucket_mids.unsqueeze(0).expand(batch_size, -1))

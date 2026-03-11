@@ -84,7 +84,9 @@ class GraphBuilder:
             return self.sample(generator)
         
         # Hide some features and set node dimensions
-        hidden_dict = {}, visible_dict = {}, dim_dict = {}
+        hidden_dict = {}
+        visible_dict = {}
+        dim_dict = {}
         for v in G.nodes():
             node_dim = self.features_per_node_dist.sample(generator)
             dim_dict[v] = node_dim
@@ -97,7 +99,7 @@ class GraphBuilder:
         nx.set_node_attributes(G, visible_dict, name="n_visible")
         
         # select target
-        target_node = G.nodes()[-1]
+        target_node = list(G.nodes())[-1]
         # resample if target node has no visible features
         if G.nodes()[target_node]["n_visible"] == 0:
             return self.sample(generator)

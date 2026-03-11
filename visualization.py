@@ -25,12 +25,12 @@ buckets = get_bucket_limits(num_outputs=n_buckets, full_range=(low, high)).to('c
 bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 dist = FullSupportBarDistribution(buckets)
     
-model_names = [{"name": "pfn_cel_03_03_15_38", "color": "red", "label": "p(y|x, D) (CEL)"},
-          {"name": "pfn_nll_03_03_15_44", "color": "blue", "label": "p(y|x, D) (NLL)"}]
+model_names = [{"name": "pfn_cel_03_10_21_54", "color": "red", "label": "p(y|x, D) (CEL)"},
+          {"name": "pfn_nll_03_10_21_58", "color": "blue", "label": "p(y|x, D) (NLL)"}]
 
 for i, data in enumerate(prior):
-    X = data['x'].cpu()  # shape (N, F)
-    y = data['y'].cpu()  # shape (N,)
+    X = data['x'].cpu()  # shape (1, N, F)
+    y = data['y'].cpu()  # shape (1, N,, 1)
     single_eval_pos = data['single_eval_pos']
     y_train = y[:single_eval_pos]
     scm = data['scm']
