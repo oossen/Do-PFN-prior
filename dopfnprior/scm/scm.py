@@ -129,6 +129,6 @@ class SCM:
                              y_idx: int = 0,
                              plot_dir: Optional[str] = None) -> Tensor:
         
-        noise_dists = {v: lambda eps : self.noise[v].log_prob(eps).sum(dim=-1) for v in self._topo}
+        noise_dists = {v: lambda eps, v=v : self.noise[v].log_prob(eps).sum(dim=-1) for v in self._topo}
         wrapper = LikelihoodWrapper(self.dag, self.mechanisms, noise_dists)
         return wrapper.log_likelihood_batch(values, y_values, y_var, y_idx, plot_dir)
