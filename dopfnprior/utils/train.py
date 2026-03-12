@@ -78,19 +78,30 @@ def train(model: NanoTabPFNModel,
                 if (torch.isnan(data[0]).any() or torch.isnan(data[1]).any()):
                     continue
                 
+                # z-normalization
+                y_mean = data[1].mean(dim=1, keepdim=True)
+                y_std = data[1].std(dim=1, keepdim=True) + 1e-8
+                y_norm = (data[1] - y_mean) / y_std
+                data = (data[0], y_norm)
+                
                 output = model(data, single_eval_pos=single_eval_pos)
                 output = output.view(-1, output.shape[-1])
                 
                 if nll:
                     y_values = full_data['y'][:, single_eval_pos:].to(device)
+                    # renormalize
+                    y_values = (y_values - y_mean) / y_std
                     y_values = y_values.reshape((-1,))
                     # if there are 1001 bucket borders (1000 buckets), clamp to [0, 999]
                     targets = (torch.bucketize(y_values, buckets) - 1).clamp(0, buckets.size(0) - 2)
                 else:
                     test_data = {v: full_data['data'][v][:, single_eval_pos:].to(device) for v in full_data['data']}
                     scm = full_data['scm']
-                    batch_size = data[0].shape[0]
-                    log_probs = scm.log_likelihood_batch(test_data, bucket_mids.unsqueeze(0).expand(batch_size, -1))
+                    # rescale bucket mids
+                    # bucket_mids: (num_buckets,) -> (1, num_buckets)
+                    # y_mean: (batch_size, 1, 1) -> (batch_size, 1)
+                    bucket_mids_rescaled = bucket_mids.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
+                    log_probs = scm.log_likelihood_batch(test_data, bucket_mids_rescaled)
                     probs = torch.exp(log_probs)
                     targets = probs.to(device)
                     # renormalize targets from density values to discrete probabilities

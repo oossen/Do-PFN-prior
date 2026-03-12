@@ -1,4 +1,4 @@
-from pfns.bar_distribution import get_bucket_limits
+from dopfnprior.configs.tabicl_activations import get_activations
 
 import torch
 import torch.nn as nn
@@ -22,11 +22,9 @@ class Square(nn.Module):
     
 non_linearities = [nn.Identity(), nn.LeakyReLU(negative_slope=0.1), Square()]
 activations = [AsinhWrapper(activation) for activation in non_linearities] + [AsinhWrapper(activation, swap_sign=True) for activation in non_linearities]
-    
 
-num_outputs = 1000
-low, high = -10.0, 10.0
-buckets = get_bucket_limits(num_outputs=num_outputs, full_range=(low, high))
+tabicl_non_linearities = [act_class() for act_class in get_activations()]
+tabicl_activations = [AsinhWrapper(activation) for activation in tabicl_non_linearities] + [AsinhWrapper(activation, swap_sign=True) for activation in tabicl_non_linearities]
 
 
 prior_config = {
@@ -59,7 +57,7 @@ prior_config = {
         # float
         "edge_prob": {
             "distribution": "logarithmic",
-            "distribution_parameters": {"low": 0.1, "high": 0.4}
+            "distribution_parameters": {"low": 0.25, "high": 0.5}
         },
         # the number of features contained in each node
         # int
@@ -86,7 +84,7 @@ prior_config = {
         # float
         "non_root_std_dist": {
             "distribution": "shifted_exponential",
-            "distribution_parameters": {"rate": 1 / 0.3, "shift": 0.1}
+            "distribution_parameters": {"rate": 1 / 0.1, "shift": 0.1}
         },
         # the activation functions to be used in the SCM
         # categorical distribution over nn.Modules

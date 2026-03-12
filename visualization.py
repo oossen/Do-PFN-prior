@@ -25,14 +25,17 @@ buckets = get_bucket_limits(num_outputs=n_buckets, full_range=(low, high)).to('c
 bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 dist = FullSupportBarDistribution(buckets)
     
-model_names = [{"name": "pfn_cel_03_10_21_54", "color": "red", "label": "p(y|x, D) (CEL)"},
-          {"name": "pfn_nll_03_10_21_58", "color": "blue", "label": "p(y|x, D) (NLL)"}]
+model_names = [{"name": "pfn_cel_03_11_19_58", "color": "red", "label": "p(y|x, D) (CEL)"},
+          {"name": "pfn_nll_03_11_20_42", "color": "blue", "label": "p(y|x, D) (NLL)"}]
 
 for i, data in enumerate(prior):
     X = data['x'].cpu()  # shape (1, N, F)
     y = data['y'].cpu()  # shape (1, N,, 1)
     single_eval_pos = data['single_eval_pos']
     y_train = y[:single_eval_pos]
+    y_mean = y_train.mean(dim=1, keepdim=True)
+    y_std = y_train.std(dim=1, keepdim=True) + 1e-8
+    y_norm = (y_train - y_mean) / y_std
     scm = data['scm']
     fig, ax = plt.subplots(figsize=(8, 5))
     xlim_set = False
@@ -42,7 +45,7 @@ for i, data in enumerate(prior):
         model.eval()
         model.to('cpu')
         with torch.no_grad():
-            logits = model((X, y_train), single_eval_pos=single_eval_pos)
+            logits = model((X, y_norm), single_eval_pos=single_eval_pos)
             logits = logits[0][0] # only look at one sample
             logits = logits.view(1, 1, -1).expand(len(bucket_mids), 1, -1)
             neg_log_probs = dist.forward(logits, bucket_mids).squeeze(0).squeeze(-1)
