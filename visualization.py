@@ -19,14 +19,14 @@ generator.manual_seed(seed)
     
 prior = ObservationalDataLoader(50, 1, prior_config, seed=seed)
 
-n_buckets = 1000
-low, high = -10.0, 10.0
+n_buckets = 2000
+low, high = -5.0, 5.0
 buckets = get_bucket_limits(num_outputs=n_buckets, full_range=(low, high)).to('cpu')
 bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 dist = FullSupportBarDistribution(buckets)
     
-model_names = [{"name": "pfn_cel_03_11_19_58", "color": "red", "label": "p(y|x, D) (CEL)"},
-          {"name": "pfn_nll_03_11_20_42", "color": "blue", "label": "p(y|x, D) (NLL)"}]
+model_names = [{"name": "pfn_cel_03_12_21_46", "color": "red", "label": "p(y|x, D) (CEL)"},
+          {"name": "pfn_nll_03_12_21_53", "color": "blue", "label": "p(y|x, D) (NLL)"}]
 
 for i, data in enumerate(prior):
     X = data['x'].cpu()  # shape (1, N, F)

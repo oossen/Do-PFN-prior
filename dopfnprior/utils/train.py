@@ -101,11 +101,8 @@ def train(model: NanoTabPFNModel,
                     # bucket_mids: (num_buckets,) -> (1, num_buckets)
                     # y_mean: (batch_size, 1, 1) -> (batch_size, 1)
                     bucket_mids_rescaled = bucket_mids.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
-                    log_probs = scm.log_likelihood_batch(test_data, bucket_mids_rescaled)
-                    probs = torch.exp(log_probs)
-                    targets = probs.to(device)
-                    # renormalize targets from density values to discrete probabilities
-                    targets = targets / targets.sum(dim=-1, keepdim=True)
+                    log_probs = scm.log_likelihood_batch(test_data, bucket_mids_rescaled).to(device)
+                    targets = torch.softmax(log_probs, dim=-1)
                     targets = targets.view(-1, targets.shape[-1])
 
                 losses = loss_fn(output, targets)

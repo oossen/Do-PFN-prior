@@ -9,8 +9,8 @@ datetime_str = now.strftime("%m_%d_%H_%M")
 output_dir = f"visualization/{datetime_str}"
 
 prior = ObservationalDataLoader(50, 1, prior_config, 42)
-n_buckets = 5000
-low, high = -10.0, 10.0
+n_buckets = 2000
+low, high = -5.0, 5.0
 buckets = get_bucket_limits(num_outputs=n_buckets, full_range=(low, high))
 bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 

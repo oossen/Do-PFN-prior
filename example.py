@@ -14,15 +14,15 @@ from dopfnprior.configs.default_config import prior_config
 
 device = get_default_device()
 seed = 42
-nll = False
+nll = True
 
 prior = ObservationalDataLoader(num_steps=10000,
                                 batch_size=4,
                                 prior_config=prior_config,
                                 seed=seed)
 
-n_buckets = 1000
-low, high = -10.0, 10.0
+n_buckets = 2000
+low, high = -5.0, 5.0
 buckets = get_bucket_limits(num_outputs=n_buckets, full_range=(low, high))
 model = NanoTabPFNModel(num_attention_heads=8, embedding_size=192, mlp_hidden_size=768, num_layers=6, num_outputs=n_buckets)
 

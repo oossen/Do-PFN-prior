@@ -40,38 +40,6 @@ class RBFActivation(nn.Module):
         return torch.exp(-(x**2))
 
 
-class RandomFreqSineActivation(nn.Module):
-    """Random frequency sine activation with fixed random scale and bias.
-
-    Applies sine activation with randomly initialized (but fixed) frequency
-    scaling and phase shift:
-    :math:`f(x) = \sin(\text{scale} \cdot \text{standardize}(x) + \text{bias})`.
-
-    The scale and bias parameters are initialized randomly but remain constant
-    during training (requires_grad=False).
-
-    Parameters
-    ----------
-    min_scale : float, default=0.1
-        Minimum value for random frequency scaling.
-
-    max_scale : float, default=100
-        Maximum value for random frequency scaling.
-    """
-
-    def __init__(self, min_scale=0.1, max_scale=100):
-        super().__init__()
-        log_min_scale = np.log(min_scale)
-        log_max_scale = np.log(max_scale)
-        self.scale = nn.Parameter(
-            torch.exp(log_min_scale + (log_max_scale - log_min_scale) * torch.rand(1)), requires_grad=False
-        )
-        self.bias = nn.Parameter(2 * np.pi * torch.rand(1), requires_grad=False)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.sin(self.scale * x + self.bias)
-
-
 class RandomFunctionActivation(nn.Module):
     """Random Fourier feature based activation function.
 
@@ -84,13 +52,13 @@ class RandomFunctionActivation(nn.Module):
         Number of frequency components to use.
     """
 
-    def __init__(self, n_frequencies: int = 256):
+    def __init__(self, n_frequencies: int = 10):
         super().__init__()
 
         self.freqs = nn.Parameter(n_frequencies * torch.rand(n_frequencies), requires_grad=False)
         self.bias = nn.Parameter(2 * np.pi * torch.rand(n_frequencies), requires_grad=False)
 
-        decay_exponent = -np.exp(np.random.uniform(np.log(0.7), np.log(3.0)))
+        decay_exponent = -np.exp(np.random.uniform(np.log(1.0), np.log(3.0)))
         with torch.no_grad():
             freq_factors = self.freqs**decay_exponent
             freq_factors = freq_factors / (freq_factors**2).sum().sqrt()
@@ -109,37 +77,6 @@ class FunctionActivation(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.f(x)
-
-
-class RandomScaleLayer(nn.Module):
-    """Random scaling layer with optional per-feature parameters.
-
-    Applies random scaling and bias:
-    :math:`f(x) = \text{scale} \cdot (x + \text{bias})`.
-
-    Parameters
-    ----------
-    individual : bool, default=False
-        If True, uses different parameters for each input feature.
-    """
-
-    def __init__(self, individual: bool = False):
-        super().__init__()
-        self.individual = individual
-        self.initialized = False
-
-    def initialize(self, x: torch.Tensor):
-        n_out = x.shape[-1] if self.individual else 1
-        self.scale = torch.exp(np.log(1.0) + 2 * torch.randn(1, n_out, device=x.device))
-        # use uniform on [0, 1] since we round to integers anyway
-        self.bias = torch.randn(1, n_out, device=x.device)
-        self.initialized = True
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if not self.initialized:
-            self.initialize(x)
-
-        return self.scale * (x + self.bias)
 
 
 class ExpActivation(nn.Module):
@@ -172,16 +109,7 @@ class AbsActivation(nn.Module):
         return torch.abs(x)
 
 
-class StdRandomScaleFactory:
-    def __init__(self, act_class, individual: bool = False):
-        self.act_class = act_class
-        self.individual = individual
-
-    def __call__(self):
-        return nn.Sequential(RandomScaleLayer(individual=self.individual), self.act_class())
-
-
-def get_activations(random: bool = True, scale: bool = True):
+def get_activations(random: bool = True):
     """Generate a list of activation functions with various configurations.
 
     This function creates a list of activation functions by combining simple activations
@@ -192,14 +120,6 @@ def get_activations(random: bool = True, scale: bool = True):
     random : bool, default=True
         If True, adds RandomFunctionActivation to the list and samples it multiple
         times to increase probability of selection.
-
-    scale : bool, default=True
-        If True, wraps activations with StdRandomScaleFactory to add standardization
-        and random scaling.
-
-    diverse : bool, default=True
-        If True, adds RandomChoiceFactory instances to allow different activation
-        functions in each layer.
     """
     # Start with a set of simple activations
     simple_activations = [
@@ -226,9 +146,5 @@ def get_activations(random: bool = True, scale: bool = True):
     if random:
         # Add random activation and sample it more often
         activations += [RandomFunctionActivation] * 10
-
-    if scale:
-        # Create scaled versions using StdRandomScaleFactory
-        activations = [StdRandomScaleFactory(act) for act in activations]
 
     return activations
