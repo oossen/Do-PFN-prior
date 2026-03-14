@@ -1,5 +1,6 @@
 from typing import List
 from datetime import datetime
+from copy import deepcopy
 from pfns.bar_distribution import get_bucket_limits
 
 from dopfnprior.utils.callbacks import ValidationCallback
@@ -17,7 +18,7 @@ seed = 42
 nll = True
 
 prior = ObservationalDataLoader(num_steps=10000,
-                                batch_size=10,
+                                batch_size=4,
                                 prior_config=prior_config,
                                 seed=seed)
 
@@ -31,7 +32,10 @@ datetime_str = now.strftime("%m_%d_%H_%M")
 run_name = f"pfn_{'nll' if nll else 'cel'}_{datetime_str}"
 output_dir = f"workdir/{run_name}"
 tensorboard_dir = f"{output_dir}/tensorboard"
-validation_callback = ValidationCallback(tensorboard_dir, prior_config, num_steps=2000)
+# fix number of test samples for validation dataloader
+val_config = deepcopy(prior_config)
+val_config['dataset_config']['number_test_samples_per_dataset'] = {"value": 100}
+validation_callback = ValidationCallback(tensorboard_dir, val_config, num_steps=2000)
 logger_callback = TensorboardLoggerCallback(tensorboard_dir)
 callbacks: List[Callback] = [logger_callback, validation_callback]
     

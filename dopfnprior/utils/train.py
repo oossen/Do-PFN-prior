@@ -63,7 +63,6 @@ def train(model: NanoTabPFNModel,
     if ckpt_path is not None:
         optimizer.load_state_dict(state_dict['optimizer'])
     buckets = buckets.to(device)
-    bucket_mids = (buckets[:-1] + buckets[1:]) / 2.0
 
     try:
         for epoch in range(start_epoch, epochs + 1):
@@ -97,12 +96,12 @@ def train(model: NanoTabPFNModel,
                 else:
                     test_data = {v: full_data['data'][v][:, single_eval_pos:].to(device) for v in full_data['data']}
                     scm = full_data['scm']
-                    # rescale bucket mids
-                    # bucket_mids: (num_buckets,) -> (1, num_buckets)
+                    # rescale buckets
+                    # buckets: (num_buckets,) -> (1, num_buckets)
                     # y_mean: (batch_size, 1, 1) -> (batch_size, 1)
-                    bucket_mids_rescaled = bucket_mids.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
-                    log_probs = scm.log_likelihood_batch(test_data, bucket_mids_rescaled).to(device)
-                    targets = torch.softmax(log_probs, dim=-1)
+                    buckets_rescaled = buckets.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
+                    log_probs = scm.log_likelihood_batch(test_data, buckets_rescaled).to(device)
+                    targets = torch.exp(log_probs)
                     targets = targets.view(-1, targets.shape[-1])
 
                 losses = loss_fn(output, targets)

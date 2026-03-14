@@ -45,8 +45,8 @@ class ValidationCallback(TensorboardLoggerCallback):
             
             test_data = {v: data['data'][v][:, single_eval_pos:] for v in data['data']}
             scm = data['scm']
-            bucket_mids_rescaled = bucket_mids.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
-            log_probs = scm.log_likelihood_batch(test_data, bucket_mids_rescaled)
+            buckets_rescaled = buckets.unsqueeze(0) * y_std.squeeze(-1) + y_mean.squeeze(-1)
+            log_probs = scm.log_likelihood_batch(test_data, buckets_rescaled)
             probs = torch.exp(log_probs).to(device)
             y_target_dist = probs / probs.sum(dim=-1, keepdim=True)
             y_target_dist = y_target_dist.view(-1, y_target_dist.shape[-1])

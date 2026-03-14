@@ -87,7 +87,7 @@ class LikelihoodWrapper:
     @torch.no_grad()
     def log_likelihood_batch(self,
                             values: Dict[str, Tensor], 
-                            y_values: Tensor, 
+                            buckets: Tensor, 
                             y_var: str = 'y',
                             y_idx: int = 0,
                             plot_dir: Optional[str] = None) -> Tensor:
@@ -100,9 +100,9 @@ class LikelihoodWrapper:
             Dictionary of sampled values.
             If `y_var` is included, its values are ignored.
             Each value should have shape (batch_size, n_rows, dim_v).
-        y_values : Tensor
-            The values of feature `y_idx`of the target variable `y_var` for which to compute the log-likelihood.
-            Should have shape (batch_size, n_y_values).
+        buckets : Tensor
+            Bucket boundaries for feature `y_idx` of the target variable `y_var`.
+            Should have shape (batch_size, n_buckets+1).
         y_var : str
             The name of the target node in the DAG.
         y_idx : int
@@ -117,53 +117,54 @@ class LikelihoodWrapper:
             Has shape (batch_size, n_rows, n_y_values).
         """ 
         device = list(values.values())[0].device
-        y_values = y_values.to(device)
-        batch_size, n_y_values = y_values.shape
+        buckets = buckets.to(device)
+        batch_size, n_buckets = buckets.shape
         n_rows = list(values.values())[0].shape[1]
         # construct the tensor of all possible combinations of values with the provided y_values
         # we replace only the feature y_idx of y_var with the provided y_values
         value_tensors = {}
-        y_shape_left = (batch_size, n_rows, n_y_values, y_idx)
-        y_shape_right = (batch_size, n_rows, n_y_values, values[y_var].shape[2] - y_idx - 1)
-        replacement_y = y_values.unsqueeze(1).expand((batch_size, n_rows, n_y_values)).unsqueeze(-1)
+        y_shape_left = (batch_size, n_rows, n_buckets, y_idx)
+        y_shape_right = (batch_size, n_rows, n_buckets, values[y_var].shape[2] - y_idx - 1)
+        replacement_y = buckets.unsqueeze(1).expand((batch_size, n_rows, n_buckets)).unsqueeze(-1)
         left_y = values[y_var][:, :, :y_idx].unsqueeze(2).expand(y_shape_left)
         right_y = values[y_var][:, :, y_idx+1:].unsqueeze(2).expand(y_shape_right)
         value_tensors[y_var] = torch.cat((left_y, replacement_y, right_y), dim=-1)
         for v, value in values.items():
             if v != y_var:
-                value_shape = (batch_size, n_rows, n_y_values, value.shape[2])
+                value_shape = (batch_size, n_rows, n_buckets, value.shape[2])
                 value_tensors[v] = value.unsqueeze(2).expand(value_shape)
                 
-        log_prob = self.total_log_probability(value_tensors)
-        # shift before integration for numerical stability
-        max_log_prob = torch.max(log_prob, dim=-1, keepdim=True)[0]
-        relative_prob = torch.exp(log_prob - max_log_prob)
-        marginal_relative = torch.trapezoid(relative_prob, y_values.unsqueeze(1).expand((batch_size, n_rows, n_y_values)), dim=-1)
-        log_marginal = torch.log(marginal_relative).unsqueeze(-1) + max_log_prob
+        log_probs = self.total_log_probability(value_tensors)
+        probs = torch.exp(log_probs)
+        bucket_widths = buckets[:, 1:] - buckets[:, :-1]
+        bucket_avg_probs = (probs[..., 1:] + probs[..., :-1]) / 2.0
+        bucket_probs = bucket_avg_probs * bucket_widths.unsqueeze(1).expand((batch_size, n_rows, n_buckets-1))
+        marginal = torch.sum(bucket_probs, dim=-1, keepdim=True)
         
-        ret = log_prob - log_marginal
+        conditional_log_probs = torch.log(bucket_probs) - torch.log(marginal)
         
         if plot_dir is not None:
             os.makedirs(plot_dir, exist_ok=True)
             # only plot the first batch
             for i in range(n_rows):
                 plt.figure()
-                probs = torch.exp(ret[0, i, :])
-                plt.plot(y_values[0].cpu().numpy(), probs.cpu().numpy())
+                conditional_probs = torch.exp(conditional_log_probs[0, i, :])
+                bucket_mids = (buckets[0, :-1] + buckets[0, 1:]) / 2.0
+                plt.plot(bucket_mids.cpu().numpy(), conditional_probs.cpu().numpy())
                 true_y = values[y_var][0, i, y_idx].cpu().item()
                 plt.axvline(true_y, color='red', linestyle='--', label='True value')
                 plt.legend()
                 plt.xlabel(y_var)
                 plt.ylabel(f"p({y_var})")
                 # set xlim to exclude values very close to 0
-                eps = 0.01 * probs.max()
-                mask = probs > eps
+                eps = 0.01 * conditional_probs.max()
+                mask = conditional_probs > eps
                 indices = torch.where(mask)[0]
                 buffer = 1
                 start_idx = max(0, indices[0] - buffer)
-                end_idx = min(len(y_values[0]) - 1, indices[-1] + buffer)
-                plt.xlim(y_values[0][start_idx].cpu().item(), y_values[0][end_idx].cpu().item())
+                end_idx = min(len(bucket_mids) - 1, indices[-1] + buffer)
+                plt.xlim(bucket_mids[start_idx].cpu().item(), bucket_mids[end_idx].cpu().item())
                 plt.savefig(f"{plot_dir}/likelihood_row_{i}.png")
                 plt.close()
 
-        return ret
+        return conditional_log_probs
