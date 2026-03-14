@@ -1,31 +1,5 @@
 from dopfnprior.configs.tabicl_activations import get_activations
 
-import torch
-import torch.nn as nn
-
-
-# activation functions
-class AsinhWrapper(nn.Module):
-    def __init__(self, activation: nn.Module, swap_sign=False):
-        super().__init__()
-        self.activation = activation
-        self.swap_sign = swap_sign
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.activation(x)
-        if self.swap_sign:
-            x = -x
-        return torch.asinh(x)
-    
-class Square(nn.Module):
-    def forward(self, x):
-        return torch.square(x)
-    
-non_linearities = [nn.Identity(), nn.LeakyReLU(negative_slope=0.1), Square()]
-activations = [AsinhWrapper(activation) for activation in non_linearities] + [AsinhWrapper(activation, swap_sign=True) for activation in non_linearities]
-
-tabicl_non_linearities = [act_class() for act_class in get_activations()]
-tabicl_activations = [AsinhWrapper(activation) for activation in tabicl_non_linearities] + [AsinhWrapper(activation, swap_sign=True) for activation in tabicl_non_linearities]
-
 
 prior_config = {
     
@@ -84,13 +58,13 @@ prior_config = {
         # float
         "non_root_std_dist": {
             "distribution": "shifted_exponential",
-            "distribution_parameters": {"rate": 1 / 0.3, "shift": 0.1}
+            "distribution_parameters": {"rate": 1 / 0.1, "shift": 0.1}
         },
         # the activation functions to be used in the SCM
         # categorical distribution over nn.Modules
         "activation_dist": {
             "distribution": "categorical",
-            "distribution_parameters": {"choices": tabicl_activations}
+            "distribution_parameters": {"choices": get_activations()}
         }
     },
     

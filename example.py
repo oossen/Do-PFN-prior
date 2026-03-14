@@ -17,7 +17,7 @@ seed = 42
 nll = True
 
 prior = ObservationalDataLoader(num_steps=10000,
-                                batch_size=4,
+                                batch_size=10,
                                 prior_config=prior_config,
                                 seed=seed)
 
@@ -39,7 +39,7 @@ trained_model, loss = train(
     model=model,
     prior=prior,
     buckets=buckets.to(device),
-    epochs=120,
+    epochs=100,
     lr=1e-4,
     accumulate_gradients=1,
     nll=nll,

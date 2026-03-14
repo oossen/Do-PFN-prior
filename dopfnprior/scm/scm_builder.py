@@ -64,9 +64,9 @@ class SCMBuilder:
         nodes = list(self.graph.nodes)
         mechanisms = {}
         for v in [v for v in nodes if self.graph.in_degree(v) > 0]:  # only create mechanisms for non-root nodes
-            activation = self.activation_dist.sample(generator)
+            activation_class = self.activation_dist.sample(generator)
             node_dims = {v: self.graph.nodes[v].get("dimension", 1) for v in nodes}
-            mech = SimpleMechanism(v, node_dims, activation, generator)
+            mech = SimpleMechanism(v, node_dims, activation_class, generator)
             mechanisms[v] = mech
         return mechanisms
     

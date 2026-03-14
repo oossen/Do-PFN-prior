@@ -25,10 +25,10 @@ class SimpleMechanism(nn.Module):
     def __init__(self, 
                  node: str, 
                  node_dims: Dict[str, int], 
-                 activation: nn.Module, 
+                 activation_class: nn.Module, 
                  generator: Optional[torch.Generator] = None) -> None:
         super().__init__()
-        self.activation = activation
+        self.activation = activation_class(generator=generator)
         linear_layers = {}
         for v in node_dims:
             layer = nn.Linear(node_dims[v], node_dims[node])
