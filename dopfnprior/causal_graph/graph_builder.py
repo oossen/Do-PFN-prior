@@ -101,7 +101,9 @@ class GraphBuilder:
         # select target
         target_node = list(G.nodes())[-1]
         # resample if target has no parents or no children
-        if len(list(G.predecessors(target_node))) == 0 or len(list(G.successors(target_node))) == 0:
+        y_has_pred = len([v for v in list(G.predecessors(target_node)) if G.nodes()[v]["n_visible"] > 0]) > 0
+        y_has_succ = len([v for v in list(G.successors(target_node)) if G.nodes()[v]["n_visible"] > 0]) > 0
+        if not y_has_pred or not y_has_succ:
             return self.sample(generator)
         # resample if target node has no visible features
         if G.nodes()[target_node]["n_visible"] == 0:

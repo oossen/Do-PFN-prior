@@ -14,7 +14,7 @@ prior_config = {
         # can be fixed because architecture is agnostic to the number of test samples
         # int
         "number_test_samples_per_dataset": {  # number of test samples per dataset. Can be fixed because architecture is agnostic to the number of test samples.
-            "value": 100
+            "value": 10
         },
     },
 

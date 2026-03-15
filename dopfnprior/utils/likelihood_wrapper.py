@@ -135,7 +135,8 @@ class LikelihoodWrapper:
                 value_tensors[v] = value.unsqueeze(2).expand(value_shape)
                 
         log_probs = self.total_log_probability(value_tensors)
-        probs = torch.exp(log_probs)
+        max_log_prob = torch.max(log_probs, dim=-1, keepdim=True)[0]
+        probs = torch.exp(log_probs - max_log_prob) # renormalize; it will cancel out in the conditional probability
         bucket_widths = buckets[:, 1:] - buckets[:, :-1]
         bucket_avg_probs = (probs[..., 1:] + probs[..., :-1]) / 2.0
         bucket_probs = bucket_avg_probs * bucket_widths.unsqueeze(1).expand((batch_size, n_rows, n_buckets-1))

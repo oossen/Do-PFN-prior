@@ -3,19 +3,19 @@ from datetime import datetime
 from copy import deepcopy
 from pfns.bar_distribution import get_bucket_limits
 
-from dopfnprior.utils.callbacks import ValidationCallback
-from dopfnprior.utils.train import train
 from tfmplayground.utils import get_default_device
 from tfmplayground.callbacks import Callback, TensorboardLoggerCallback
 from tfmplayground.model import NanoTabPFNModel
 
+from dopfnprior.utils.callbacks import ValidationCallback
+from dopfnprior.utils.train import train
 from dopfnprior.dataloaders.observational_dataloader import ObservationalDataLoader
 from dopfnprior.configs.default_config import prior_config
 
 
 device = get_default_device()
 seed = 42
-nll = True
+nll = False
 
 prior = ObservationalDataLoader(num_steps=10000,
                                 batch_size=4,
