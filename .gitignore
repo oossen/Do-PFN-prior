@@ -1,6 +1,5 @@
 .venv/
 .vscode/
-workdir/
 visualization/
 logs/
 

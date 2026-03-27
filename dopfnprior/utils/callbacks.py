@@ -51,18 +51,24 @@ class ValidationCallback(TensorboardLoggerCallback):
             y_target_dist = probs / probs.sum(dim=-1, keepdim=True)
             y_target_dist = y_target_dist.view(-1, y_target_dist.shape[-1])
             
-            logits = model((X, y_norm), single_eval_pos=single_eval_pos)
-            logits = logits.view(-1, logits.shape[-1])
-            probs = torch.softmax(logits, dim=-1)
-            y_pred = probs @ bucket_mids
+            try:
+                logits = model((X, y_norm), single_eval_pos=single_eval_pos)
+                logits = logits.view(-1, logits.shape[-1])
+                probs = torch.softmax(logits, dim=-1)
+                y_pred = probs @ bucket_mids
+                
+                ce_loss = torch.nn.CrossEntropyLoss()
+                nll = ce_loss(logits, y_target_buckets).item()
+                cel = ce_loss(logits, y_target_dist).item()
+                
+                r2 = r2_score(y_target.cpu().numpy(), y_pred.cpu().numpy())
+                mse = mean_squared_error(y_target.cpu().numpy(), y_pred.cpu().numpy())
             
-            ce_loss = torch.nn.CrossEntropyLoss()
-            nll = ce_loss(logits, y_target_buckets).item()
-            cel = ce_loss(logits, y_target_dist).item()
-            
-            r2 = r2_score(y_target.cpu().numpy(), y_pred.cpu().numpy())
-            mse = mean_squared_error(y_target.cpu().numpy(), y_pred.cpu().numpy())
-            
+            except Exception as e:
+                print(f"Error occurred during validation: {e}")
+                print(f"Model logits: {logits}")
+                continue
+
             r2_scores.append(r2)
             mse_scores.append(mse)
             nll_scores.append(nll)
