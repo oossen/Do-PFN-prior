@@ -13,4 +13,4 @@ readme = "README.md"
 requires-python = "==3.12.*"
 
 [tool.setuptools]
-packages = ["your_package_name"]
+packages = ["dopfnprior"]
