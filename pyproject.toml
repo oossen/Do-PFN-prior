@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dopfnprior"
-version = "0.4.4.4"
+version = "0.4.4.5"
 authors = [
     { name = "Ole Ossen", email = "ole.ossen@gmail.com" },
 ]
@@ -12,5 +12,6 @@ description = "A simple regression prior for PFNs"
 readme = "README.md"
 requires-python = "==3.12.*"
 
-[tool.setuptools]
-packages = ["dopfnprior"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dopfnprior*"]
